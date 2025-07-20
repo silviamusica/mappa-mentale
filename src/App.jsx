@@ -14,7 +14,7 @@ const ChordMindMap = () => {
   const chordData = {
     triadi: {
       title: "TRIADI (3 Note)",
-      color: "bg-gradient-to-r from-cyan-900 via-blue-800 to-teal-700",
+      color: "bg-cyan-900",
       textColor: "text-cyan-100",
       subsections: {
         base: {
@@ -37,7 +37,7 @@ const ChordMindMap = () => {
     },
     quadriadi: {
       title: "QUADRIADI (4 Note)",
-      color: "bg-gradient-to-r from-cyan-900 via-blue-800 to-teal-700",
+      color: "bg-cyan-900",
       textColor: "text-cyan-100",
       subsections: {
         seste: {
@@ -83,7 +83,7 @@ const ChordMindMap = () => {
     },
     estesi: {
       title: "ACCORDI ESTESI (5-7 Note)",
-      color: "bg-gradient-to-r from-cyan-900 via-blue-800 to-teal-700",
+      color: "bg-cyan-900",
       textColor: "text-cyan-100",
       subsections: {
         none: {
@@ -147,7 +147,15 @@ const ChordMindMap = () => {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-6 bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen text-white">
+    <div
+      className="w-full max-w-7xl mx-auto p-6 min-h-screen text-white"
+      style={{
+        backgroundColor: '#0a1833',
+        backgroundImage: `url("data:image/svg+xml,%3Csvg width='1600' height='1000' xmlns='http://www.w3.org/2000/svg'%3E%3Cg%3E%3Ccircle cx='154' cy='987' r='0.6' fill='white' opacity='0.7'/%3E%3Ccircle cx='1202' cy='234' r='0.4' fill='white' opacity='0.5'/%3E%3Ccircle cx='1456' cy='876' r='0.5' fill='white' opacity='0.8'/%3E%3Ccircle cx='321' cy='123' r='0.3' fill='white' opacity='0.6'/%3E%3Ccircle cx='789' cy='654' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='100' cy='900' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1300' cy='200' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1500' cy='800' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='170' cy='180' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='190' cy='200' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='210' cy='220' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='230' cy='240' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='250' cy='260' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='270' cy='280' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='290' cy='300' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='310' cy='320' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='330' cy='340' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='350' cy='360' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='370' cy='380' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='390' cy='400' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='410' cy='420' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='430' cy='440' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='450' cy='460' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='470' cy='480' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='490' cy='500' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='510' cy='520' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='530' cy='540' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='550' cy='560' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='570' cy='580' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='590' cy='600' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='610' cy='620' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='630' cy='640' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='650' cy='660' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='670' cy='680' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='690' cy='700' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='710' cy='720' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='730' cy='740' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='750' cy='760' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='770' cy='780' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='790' cy='800' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='810' cy='820' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='830' cy='840' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='850' cy='860' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='870' cy='880' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='890' cy='900' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='910' cy='920' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='930' cy='940' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='950' cy='960' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='970' cy='980' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='990' cy='1000' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1010' cy='1020' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1030' cy='1040' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1050' cy='1060' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1070' cy='1080' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1090' cy='1100' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1110' cy='1120' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1130' cy='1140' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1150' cy='1160' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1170' cy='1180' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1190' cy='1200' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1210' cy='1220' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1230' cy='1240' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1250' cy='1260' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1270' cy='1280' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1290' cy='1300' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1310' cy='1320' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1330' cy='1340' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1350' cy='1360' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1370' cy='1380' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1390' cy='1400' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1410' cy='1420' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1430' cy='1440' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1450' cy='1460' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1470' cy='1480' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1490' cy='1500' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1510' cy='1520' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1530' cy='1540' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1550' cy='1560' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1570' cy='1580' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1590' cy='1600' r='0.4' fill='white' opacity='0.6'/%3E%3C/g%3E%3C/svg%3E")`,
+        backgroundRepeat: 'repeat',
+        backgroundSize: 'cover',
+      }}
+    >
       {/* Header */}
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent mb-2">
@@ -206,34 +214,41 @@ const ChordMindMap = () => {
           >
             Memorizza facilmente creando dei cassetti
           </span>
+          <label className="flex items-center gap-2 bg-gray-700 px-4 py-2 rounded-lg text-sm cursor-pointer mt-4">
+            <input
+              type="checkbox"
+              checked={showOnlyComuni}
+              onChange={e => setShowOnlyComuni(e.target.checked)}
+              className="accent-yellow-400"
+            />
+            Mostra solo accordi comuni
+          </label>
         </div>
-        {/* Frase rimossa su richiesta */}
       </div>
-
-      {/* Selettore accordi comuni/tutti */}
-      <div className="flex justify-center mb-6">
-        <label className="flex items-center gap-2 bg-gray-700 px-4 py-2 rounded-lg text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showOnlyComuni}
-            onChange={e => setShowOnlyComuni(e.target.checked)}
-            className="accent-yellow-400"
-          />
-          Mostra solo accordi comuni
-        </label>
-      </div>
-
       {/* Main Content */}
       <div className="flex gap-10">
         {/* Mind Map */}
         <div className="flex-1 space-y-8">
           {Object.entries(chordData).map(([categoryKey, category]) => (
-            <div key={categoryKey} className="bg-gray-900 rounded-2xl p-8 shadow-sm border border-gray-800">
+            <div
+              key={categoryKey}
+              className="bg-gray-900 rounded-2xl p-8 shadow-sm border border-gray-800"
+            >
               {/* Category Header */}
               <button
                 onClick={() => toggleCategory(categoryKey)}
-                className={`w-full flex items-center justify-between p-4 rounded-xl ${category.color} ${category.textColor} font-semibold text-lg mb-6 shadow-none hover:opacity-95 transition-opacity border-none`}
-                style={{boxShadow: 'none'}}
+                className={`w-full flex items-center justify-between p-4 rounded-xl font-semibold text-lg mb-6 shadow-none hover:opacity-95 transition-opacity border-none`}
+                style={{
+                  background:
+                    categoryKey === 'triadi' ? '#4a6fa5'
+                    : categoryKey === 'quadriadi' ? '#5fb9b0'
+                    : categoryKey === 'estesi' ? '#b7a7e9'
+                    : '#3399cc',
+                  color: '#fff',
+                  boxShadow: 'none',
+                  border: 'none',
+                  letterSpacing: '0.03em',
+                }}
               >
                 <span>{category.title}</span>
                 {expandedCategories[categoryKey] ? <ChevronDown /> : <ChevronRight />}
@@ -251,7 +266,7 @@ const ChordMindMap = () => {
                       const subsectionExpandKey = `${categoryKey}-${subsectionKey}`;
                       const isSubsectionExpanded = expandedSubsections[subsectionExpandKey];
                       return (
-                        <div key={subsectionKey} className="bg-gray-800 rounded-xl p-5 border border-gray-700 mb-4">
+                        <div key={subsectionKey} className="bg-gray-800 rounded-xl p-5 border border-gray-700 mb-4 ml-3 md:ml-6">
                           {/* Subsection Header */}
                           <button
                             onClick={() => toggleSubsection(categoryKey, subsectionKey)}
