@@ -1,467 +1,386 @@
-import React, { useState, useRef } from 'react';
-import { Play, Pause, Volume2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Music, Volume2, X, ChevronDown, ChevronRight } from 'lucide-react';
 
-const PianoChordApp = () => {
-  // Stati principali
-  const [selectedCategory, setSelectedCategory] = useState('triadi');
-  const [selectedChord, setSelectedChord] = useState('');
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [rootNote, setRootNote] = useState('C'); // Nota di partenza per trasposizione
-  
-  // Stati per animazioni e feedback visivo
-  const [activeKeys, setActiveKeys] = useState(new Set());
-  const [keyAnimations, setKeyAnimations] = useState(new Map());
-  const audioContextRef = useRef(null);
+const ChordMindMap = () => {
+  const [selectedChord, setSelectedChord] = useState(null);
+  const [expandedCategories, setExpandedCategories] = useState({
+    triadi: true,
+    quadriadi: true,
+    estesi: false
+  });
+  const [expandedSubsections, setExpandedSubsections] = useState({});
+  const [showOnlyComuni, setShowOnlyComuni] = useState(false);
 
-  // Tutte le note disponibili per trasposizione
-  const allNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
-  // Funzione per trasporre una nota
-  const transposeNote = (note, semitones) => {
-    const noteWithoutOctave = note.slice(0, -1);
-    const octave = parseInt(note.slice(-1));
-    const noteIndex = allNotes.indexOf(noteWithoutOctave);
-    
-    if (noteIndex === -1) return note;
-    
-    let newNoteIndex = (noteIndex + semitones) % 12;
-    if (newNoteIndex < 0) newNoteIndex += 12;
-    
-    let newOctave = octave + Math.floor((noteIndex + semitones) / 12);
-    if (noteIndex + semitones < 0) newOctave--;
-    
-    return allNotes[newNoteIndex] + newOctave;
-  };
-
-  // Calcola i semitoni di trasposizione dalla nota C
-  const transpositionSemitones = allNotes.indexOf(rootNote);
-
-  // All piano keys for display (2 ottave complete: C3-C5)
-  const pianoKeys = [
-    { note: 'C3', type: 'white' },
-    { note: 'C#3', type: 'black' },
-    { note: 'D3', type: 'white' },
-    { note: 'D#3', type: 'black' },
-    { note: 'E3', type: 'white' },
-    { note: 'F3', type: 'white' },
-    { note: 'F#3', type: 'black' },
-    { note: 'G3', type: 'white' },
-    { note: 'G#3', type: 'black' },
-    { note: 'A3', type: 'white' },
-    { note: 'A#3', type: 'black' },
-    { note: 'B3', type: 'white' },
-    { note: 'C4', type: 'white' },
-    { note: 'C#4', type: 'black' },
-    { note: 'D4', type: 'white' },
-    { note: 'D#4', type: 'black' },
-    { note: 'E4', type: 'white' },
-    { note: 'F4', type: 'white' },
-    { note: 'F#4', type: 'black' },
-    { note: 'G4', type: 'white' },
-    { note: 'G#4', type: 'black' },
-    { note: 'A4', type: 'white' },
-    { note: 'A#4', type: 'black' },
-    { note: 'B4', type: 'white' },
-    { note: 'C5', type: 'white' }
-  ];
-
-  // Database accordi completo basato sul CSV
-  const chordDatabase = {
+  const chordData = {
     triadi: {
-      'C': { name: 'Do maggiore', notes: ['C4', 'E4', 'G4'], intervals: '1 3 5' },
-      'Cm': { name: 'Do minore', notes: ['C4', 'D#4', 'G4'], intervals: '1 b3 5' },
-      'Caug': { name: 'Do aumentato', notes: ['C4', 'E4', 'G#4'], intervals: '1 3 #5' },
-      'Cdim': { name: 'Do diminuito', notes: ['C4', 'D#4', 'F#4'], intervals: '1 b3 b5' },
-      'Csus2': { name: 'Do seconda sospesa', notes: ['C4', 'D4', 'G4'], intervals: '1 2 5' },
-      'Csus4': { name: 'Do quarta sospesa', notes: ['C4', 'F4', 'G4'], intervals: '1 4 5' }
+      title: "TRIADI (3 Note)",
+      color: "bg-blue-500",
+      textColor: "text-blue-100",
+      subsections: {
+        base: {
+          title: "Accordi Base",
+          chords: [
+            { sigla: 'C', nome: 'Maggiore', formula: '1 - 3 - 5', note: 'Do Mi Sol', comune: true },
+            { sigla: 'Cm', nome: 'Minore', formula: '1 - ♭3 - 5', note: 'Do Mi♭ Sol', comune: true },
+            { sigla: 'Caug', nome: 'Aumentato', formula: '1 - 3 - ♯5', note: 'Do Mi Sol♯', comune: false },
+            { sigla: 'Cdim', nome: 'Diminuito', formula: '1 - ♭3 - ♭5', note: 'Do Mi♭ Sol♭', comune: false }
+          ]
+        },
+        sus: {
+          title: "Sospesi",
+          chords: [
+            { sigla: 'Csus2', nome: 'Seconda sospesa', formula: '1 - 2 - 5', note: 'Do Re Sol', comune: false },
+            { sigla: 'Csus4', nome: 'Quarta sospesa', formula: '1 - 4 - 5', note: 'Do Fa Sol', comune: false }
+          ]
+        }
+      }
     },
     quadriadi: {
-      'C6': { name: 'Do sesta', notes: ['C4', 'E4', 'G4', 'A4'], intervals: '1 3 5 6' },
-      'Cm6': { name: 'Do minore sesta', notes: ['C4', 'D#4', 'G4', 'A4'], intervals: '1 b3 5 6' },
-      'C7': { name: 'Do settima (dominante)', notes: ['C4', 'E4', 'G4', 'A#4'], intervals: '1 3 5 b7' },
-      'Cmaj7': { name: 'Do settima maggiore', notes: ['C4', 'E4', 'G4', 'B4'], intervals: '1 3 5 7' },
-      'Cm7': { name: 'Do minore settima', notes: ['C4', 'D#4', 'G4', 'A#4'], intervals: '1 b3 5 b7' },
-      'Cm7b5': { name: 'Do semidiminuito', notes: ['C4', 'D#4', 'F#4', 'A#4'], intervals: '1 b3 b5 b7' },
-      'Cm(maj7)': { name: 'Do minore settima maggiore', notes: ['C4', 'D#4', 'G4', 'B4'], intervals: '1 b3 5 7' },
-      'Cmaj7#5': { name: 'Do settima maggiore quinta aumentata', notes: ['C4', 'E4', 'G#4', 'B4'], intervals: '1 3 #5 7' },
-      'C7#5': { name: 'Do settima quinta aumentata', notes: ['C4', 'E4', 'G#4', 'A#4'], intervals: '1 3 #5 b7' },
-      'C7b5': { name: 'Do settima quinta diminuita', notes: ['C4', 'E4', 'F#4', 'A#4'], intervals: '1 3 b5 b7' },
-      'Cmaj7b5': { name: 'Do settima maggiore quinta diminuita', notes: ['C4', 'E4', 'F#4', 'B4'], intervals: '1 3 b5 7' },
-      'Cdim(maj7)': { name: 'Do diminuito settima maggiore', notes: ['C4', 'D#4', 'F#4', 'B4'], intervals: '1 b3 b5 7' },
-      'C7sus4': { name: 'Do settima quarta sospesa', notes: ['C4', 'F4', 'G4', 'A#4'], intervals: '1 4 5 b7' }
-    },
-    estese: {
-      'C9': { name: 'Do nona (dominante)', notes: ['C4', 'E4', 'G4', 'A#4', 'D5'], intervals: '1 3 5 b7 9' },
-      'Cmaj9': { name: 'Do nona maggiore', notes: ['C4', 'E4', 'G4', 'B4', 'D5'], intervals: '1 3 5 7 9' },
-      'Cm9': { name: 'Do minore nona', notes: ['C4', 'D#4', 'G4', 'A#4', 'D5'], intervals: '1 b3 5 b7 9' },
-      'C11': { name: 'Do undicesima (dominante)', notes: ['C4', 'E4', 'G4', 'A#4', 'D5', 'F5'], intervals: '1 3 5 b7 9 11' },
-      'Cm11': { name: 'Do minore undicesima', notes: ['C4', 'D#4', 'G4', 'A#4', 'D5', 'F5'], intervals: '1 b3 5 b7 9 11' },
-      'C13': { name: 'Do tredicesima (dominante)', notes: ['C4', 'E4', 'G4', 'A#4', 'D5', 'A5'], intervals: '1 3 5 b7 9 13' },
-      'Cmaj13': { name: 'Do tredicesima maggiore', notes: ['C4', 'E4', 'G4', 'B4', 'D5', 'A5'], intervals: '1 3 5 7 9 13' },
-      'C13sus4': { name: 'Do tredicesima sospesa', notes: ['C4', 'F4', 'G4', 'A#4', 'D5', 'A5'], intervals: '1 4 5 b7 9 13' },
-      'C7b9': { name: 'Do settima nona diminuita', notes: ['C4', 'E4', 'G4', 'A#4', 'C#5'], intervals: '1 3 5 b7 b9' },
-      'C7#9': { name: 'Do settima nona aumentata', notes: ['C4', 'E4', 'G4', 'A#4', 'D#5'], intervals: '1 3 5 b7 #9' },
-      'C7b9#5': { name: 'Do settima nona dim. quinta aum.', notes: ['C4', 'E4', 'G#4', 'A#4', 'C#5'], intervals: '1 3 #5 b7 b9' },
-      'C7b13': { name: 'Do settima tredicesima diminuita', notes: ['C4', 'E4', 'G4', 'A#4', 'G#5'], intervals: '1 3 5 b7 b13' }
-    }
-  };
-
-  const currentChords = chordDatabase[selectedCategory];
-  const originalChord = currentChords[selectedChord];
-  
-  // Funzione per trasporre il nome dell'accordo
-  const getTransposedChordName = (chordSymbol, originalChord) => {
-    if (!originalChord) return { symbol: chordSymbol, name: chordSymbol };
-    
-    if (rootNote === 'C') {
-      return { symbol: chordSymbol, name: originalChord.name };
-    }
-    
-    // Sostituisce la C iniziale con la nuova nota di partenza
-    const transposedSymbol = chordSymbol.replace(/^C/, rootNote);
-    const transposedName = originalChord.name.replace(/^Do/, 
-      rootNote === 'C#' || rootNote === 'D#' || rootNote === 'F#' || rootNote === 'G#' || rootNote === 'A#' 
-        ? rootNote.replace('#', ' diesis')
-        : rootNote === 'D' ? 'Re'
-        : rootNote === 'E' ? 'Mi' 
-        : rootNote === 'F' ? 'Fa'
-        : rootNote === 'G' ? 'Sol'
-        : rootNote === 'A' ? 'La'
-        : rootNote === 'B' ? 'Si'
-        : rootNote
-    );
-    
-    return { symbol: transposedSymbol, name: transposedName };
-  };
-
-  // Crea l'accordo trasposto
-  const currentChord = originalChord ? {
-    ...originalChord,
-    notes: originalChord.notes.map(note => transposeNote(note, transpositionSemitones))
-  } : null;
-
-  // Funzione per verificare se un tasto è parte dell'accordo
-  const isKeyInChord = (note) => {
-    return currentChord?.notes.includes(note);
-  };
-
-  // Funzione per ottenere la frequenza di una nota
-  const getNoteFrequency = (note) => {
-    const noteMap = {
-      'C': 0, 'C#': 1, 'D': 2, 'D#': 3, 'E': 4, 'F': 5,
-      'F#': 6, 'G': 7, 'G#': 8, 'A': 9, 'A#': 10, 'B': 11
-    };
-    
-    const noteName = note.slice(0, -1);
-    const octave = parseInt(note.slice(-1));
-    const semitoneFromA4 = (octave - 4) * 12 + noteMap[noteName] - 9;
-    return 440 * Math.pow(2, semitoneFromA4 / 12);
-  };
-
-  // Funzione per suonare una singola nota
-  const playNote = (note) => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    const audioContext = audioContextRef.current;
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.setValueAtTime(getNoteFrequency(note), audioContext.currentTime);
-    // Uso triangle wave anche per le note singole
-    oscillator.type = 'triangle';
-    
-    // Attacco più netto anche per le note singole
-    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.4, audioContext.currentTime + 0.01); // Attacco rapidissimo
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
-    
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.8);
-  };
-
-  // Funzione per suonare l'accordo
-  const playChord = async () => {
-    if (isPlaying) return;
-    
-    setIsPlaying(true);
-    
-    try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      title: "QUADRIADI (4 Note)",
+      color: "bg-green-500",
+      textColor: "text-green-100",
+      subsections: {
+        seste: {
+          title: "Seste",
+          chords: [
+            { sigla: 'C6', nome: 'Sesta', formula: '1 - 3 - 5 - 6', note: 'Do Mi Sol La', comune: true },
+            { sigla: 'Cm6', nome: 'Minore sesta', formula: '1 - ♭3 - 5 - 6', note: 'Do Mi♭ Sol La', comune: false }
+          ]
+        },
+        settime: {
+          title: "Settime",
+          chords: [
+            { sigla: 'C7', nome: 'Settima di dominante', formula: '1 - 3 - 5 - ♭7', note: 'Do Mi Sol Si♭', comune: true },
+            { sigla: 'Cmaj7', nome: 'Settima maggiore', formula: '1 - 3 - 5 - 7', note: 'Do Mi Sol Si', comune: true },
+            { sigla: 'Cm7', nome: 'Minore settima', formula: '1 - ♭3 - 5 - ♭7', note: 'Do Mi♭ Sol Si♭', comune: true },
+            { sigla: 'Cm7♭5', nome: 'Semidiminuito', formula: '1 - ♭3 - ♭5 - ♭7', note: 'Do Mi♭ Sol♭ Si♭', comune: false },
+            { sigla: 'Cm(maj7)', nome: 'Minore settima maggiore', formula: '1 - ♭3 - 5 - 7', note: 'Do Mi♭ Sol Si', comune: false },
+            { sigla: 'Cmaj7♯5', nome: 'Settima maggiore quinta aumentata', formula: '1 - 3 - ♯5 - 7', note: 'Do Mi Sol♯ Si', comune: false },
+            { sigla: 'C7♯5', nome: 'Settima con quinta aumentata', formula: '1 - 3 - ♯5 - ♭7', note: 'Do Mi Sol♯ Si♭', comune: false },
+            { sigla: 'C7♭5', nome: 'Settima con quinta diminuita', formula: '1 - 3 - ♭5 - ♭7', note: 'Do Mi Sol♭ Si♭', comune: false },
+            { sigla: 'Cmaj7♭5', nome: 'Settima maggiore con quinta diminuita', formula: '1 - 3 - ♭5 - 7', note: 'Do Mi Sol♭ Si', comune: false },
+            { sigla: 'Cdim(maj7)', nome: 'Diminuito settima maggiore', formula: '1 - ♭3 - ♭5 - 7', note: 'Do Mi♭ Sol♭ Si', comune: false }
+          ]
+        },
+        sus: {
+          title: "Settime Sospese",
+          chords: [
+            { sigla: 'C7sus4', nome: 'Settima con quarta sospesa', formula: '1 - 4 - 5 - ♭7', note: 'Do Fa Sol Si♭', comune: false }
+          ]
+        },
+        add: {
+          title: "Accordi Add",
+          chords: [
+            { sigla: 'Cadd9', nome: 'Maggiore con nona', formula: '1 - 3 - 5 - 9', note: 'Do Mi Sol Re', comune: true },
+            { sigla: 'Cmadd9', nome: 'Minore con nona', formula: '1 - ♭3 - 5 - 9', note: 'Do Mi♭ Sol Re', comune: true },
+            { sigla: 'Cadd2', nome: 'Maggiore add2', formula: '1 - 2 - 3 - 5', note: 'Do Re Mi Sol', comune: true },
+            { sigla: 'Cmadd2', nome: 'Minore add2', formula: '1 - 2 - ♭3 - 5', note: 'Do Re Mi♭ Sol', comune: false },
+            { sigla: 'Cadd4', nome: 'Maggiore add4', formula: '1 - 3 - 4 - 5', note: 'Do Mi Fa Sol', comune: false },
+            { sigla: 'Cmadd4', nome: 'Minore add4', formula: '1 - ♭3 - 4 - 5', note: 'Do Mi♭ Fa Sol', comune: false }
+          ]
+        }
       }
-      
-      const audioContext = audioContextRef.current;
-      const masterGain = audioContext.createGain();
-      masterGain.connect(audioContext.destination);
-      
-      // Volume master più alto e attacco più netto
-      masterGain.gain.setValueAtTime(0.4, audioContext.currentTime);
-      masterGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 3);
-
-      currentChord.notes.forEach((note, index) => {
-        const oscillator = audioContext.createOscillator();
-        const noteGain = audioContext.createGain();
-        
-        oscillator.connect(noteGain);
-        noteGain.connect(masterGain);
-        
-        oscillator.frequency.setValueAtTime(getNoteFrequency(note), audioContext.currentTime);
-        // Uso triangle wave per un suono più pieno
-        oscillator.type = 'triangle';
-        
-        // Attacco molto più netto e immediato
-        noteGain.gain.setValueAtTime(0, audioContext.currentTime);
-        noteGain.gain.linearRampToValueAtTime(0.8, audioContext.currentTime + 0.02); // Attacco rapidissimo
-        noteGain.gain.linearRampToValueAtTime(0.6, audioContext.currentTime + 0.3);  // Sustain più alto
-        noteGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 3);
-        
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 3);
-      });
-
-      setTimeout(() => setIsPlaying(false), 3000);
-    } catch (error) {
-      console.error('Errore nella riproduzione audio:', error);
-      setIsPlaying(false);
+    },
+    estesi: {
+      title: "ACCORDI ESTESI (5-7 Note)",
+      color: "bg-purple-500",
+      textColor: "text-purple-100",
+      subsections: {
+        none: {
+          title: "None",
+          chords: [
+            { sigla: 'C9', nome: 'Nona di dominante', formula: '1 - 3 - 5 - ♭7 - 9', note: 'Do Mi Sol Si♭ Re', comune: true },
+            { sigla: 'Cmaj9', nome: 'Nona maggiore', formula: '1 - 3 - 5 - 7 - 9', note: 'Do Mi Sol Si Re', comune: false },
+            { sigla: 'Cm9', nome: 'Minore nona', formula: '1 - ♭3 - 5 - ♭7 - 9', note: 'Do Mi♭ Sol Si♭ Re', comune: false }
+          ]
+        },
+        undicesime: {
+          title: "Undicesime",
+          chords: [
+            { sigla: 'C11', nome: 'Undicesima (dominante)', formula: '1 - 3 - 5 - ♭7 - 9 - 11', note: 'Do Mi Sol Si♭ Re Fa', comune: false },
+            { sigla: 'Cm11', nome: 'Undicesima minore', formula: '1 - ♭3 - 5 - ♭7 - 9 - 11', note: 'Do Mi♭ Sol Si♭ Re Fa', comune: false }
+          ]
+        },
+        tredicesime: {
+          title: "Tredicesime",
+          chords: [
+            { sigla: 'C13', nome: 'Tredicesima (dominante)', formula: '1 - 3 - 5 - ♭7 - 9 - 13', note: 'Do Mi Sol Si♭ Re La', comune: false },
+            { sigla: 'Cmaj13', nome: 'Tredicesima maggiore', formula: '1 - 3 - 5 - 7 - 9 - 13', note: 'Do Mi Sol Si Re La', comune: false }
+          ]
+        },
+        sus: {
+          title: "Estesi Sospesi",
+          chords: [
+            { sigla: 'C13sus4', nome: 'Tredicesima sospesa', formula: '1 - 4 - 5 - ♭7 - 9 - 13', note: 'Do Fa Sol Si♭ Re La', comune: false }
+          ]
+        },
+        alterati: {
+          title: "Accordi Alterati",
+          chords: [
+            { sigla: 'C7♭9', nome: 'Settima con nona diminuita', formula: '1 - 3 - 5 - ♭7 - ♭9', note: 'Do Mi Sol Si♭ Re♭', comune: false },
+            { sigla: 'C7♯9', nome: 'Settima con nona aumentata', formula: '1 - 3 - 5 - ♭7 - ♯9', note: 'Do Mi Sol Si♭ Re♯', comune: false },
+            { sigla: 'C7♭9♯5', nome: 'Settima con nona dim. e quinta aum.', formula: '1 - 3 - ♯5 - ♭7 - ♭9', note: 'Do Mi Sol♯ Si♭ Re♭', comune: false },
+            { sigla: 'C7♭13', nome: 'Settima con tredicesima diminuita', formula: '1 - 3 - 5 - ♭7 - ♭13', note: 'Do Mi Sol Si♭ La♭', comune: false }
+          ]
+        }
+      }
     }
   };
 
-  // Render della tastiera piano migliorata
-  const renderPiano = () => {
-    const whiteKeys = pianoKeys.filter(key => key.type === 'white');
-    const blackKeys = pianoKeys.filter(key => key.type === 'black');
+  const toggleCategory = (category) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [category]: !prev[category]
+    }));
+  };
 
-    return (
-      <div className="flex justify-center px-8 mb-8">
-        <div className="relative bg-gray-200 p-4 rounded-2xl shadow-sm" style={{width: '928px'}}>
-          <div className="relative">
-            {/* Tasti bianchi */}
-            <div className="flex">
-              {whiteKeys.map((key) => {
-                const isActive = isKeyInChord(key.note);
-                const animationKey = keyAnimations.get(key.note) || 0;
-                
-                return (
-                  <button
-                    key={key.note}
-                    onMouseDown={() => playNote(key.note)}
-                    className={`
-                      w-16 h-64 border border-gray-300 rounded-b-xl
-                      hover:bg-gray-50 active:bg-gray-100
-                      transition-all duration-300
-                      ${isActive ? 'bg-teal-200 border-teal-400' : 'bg-white'}
-                    `}
-                    style={{
-                      animationDuration: '0.6s',
-                      animationIterationCount: '1',
-                      animationKey: animationKey
-                    }}
-                  >
-                  </button>
-                );
-              })}
-            </div>
+  const toggleSubsection = (categoryKey, subsectionKey) => {
+    const key = `${categoryKey}-${subsectionKey}`;
+    setExpandedSubsections(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
-            {/* Tasti neri */}
-            <div className="absolute top-0 left-0">
-              {blackKeys.map((key, index) => {
-                // Posizionamento preciso per 2 ottave: tasti neri a cavallo delle note bianche
-                const blackKeyPositions = {
-                  'C#3': 0.7,   // tasto nero 1: spostato verso destra per centrare meglio
-                  'D#3': 1.7,   // tasto nero 2: spostato verso destra per centrare meglio
-                  'F#3': 3.5,   // tasto nero 3: a cavallo fra nota bianca 4 e 5
-                  'G#3': 4.5,   // tasto nero 4: a cavallo fra nota bianca 5 e 6
-                  'A#3': 5.5,   // tasto nero 5: a cavallo fra nota bianca 6 e 7
-                  'C#4': 7.3,   // tasto nero 6: spostato leggermente a sinistra per centrare meglio
-                  'D#4': 8.3,   // tasto nero 7: spostato leggermente a sinistra per centrare meglio
-                  'F#4': 10.3,  // tasto nero 8: spostato leggermente a sinistra per centrare meglio
-                  'G#4': 11.3,  // tasto nero 9: spostato leggermente a sinistra per centrare meglio
-                  'A#4': 12.2   // tasto nero 10: spostato leggermente a sinistra per centrare meglio
-                };
-                
-                const position = blackKeyPositions[key.note];
-                const leftOffset = (position * 64) - 24; // 64px per tasto bianco, -24px per centrare
-                const isActive = isKeyInChord(key.note);
-                const animationKey = keyAnimations.get(key.note) || 0;
-                
-                return (
-                  <button
-                    key={key.note}
-                    onMouseDown={() => playNote(key.note)}
-                    style={{ 
-                      left: `${leftOffset + 4}px`,
-                      animationKey: animationKey
-                    }}
-                    className={`
-                      absolute w-12 h-40 border border-gray-800 rounded-b-lg shadow-2xl text-white
-                      hover:bg-gray-800 active:bg-gray-700
-                      transition-all duration-300 z-10
-                      ${isActive ? 'bg-teal-600 border-teal-500' : 'bg-black'}
-                    `}
-                  >
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  const handleChordClick = (chord, category) => {
+    setSelectedChord({ ...chord, category });
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-cyan-100 p-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">Allenatore di accordi</h1>
-          <div className="text-3xl mb-4" style={{fontFamily: 'serif'}}>
-            <span className="text-black font-normal">sognando</span><span className="text-red-600 font-bold italic">il</span><span className="text-black font-bold">piano</span>
-          </div>
+    <div className="w-full max-w-7xl mx-auto p-6 bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen text-white">
+      {/* Header */}
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent mb-2">
+          Mappa mentale accordi
+        </h1>
+        <div className="flex flex-col items-center">
+          <span
+            style={{
+              fontFamily: 'Bodoni FLF, serif',
+              fontWeight: 'bold',
+              color: 'white',
+              fontSize: '2.1rem',
+              letterSpacing: '0.02em',
+              marginBottom: '0.2rem',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'inherit',
+                fontWeight: 'normal',
+                color: 'white',
+                fontStyle: 'normal',
+              }}
+            >
+              sognando
+            </span>
+            <span
+              style={{
+                fontFamily: 'inherit',
+                fontStyle: 'italic',
+                color: 'red',
+                fontWeight: 'normal',
+              }}
+            >
+              il
+            </span>
+            <span
+              style={{
+                fontFamily: 'inherit',
+                fontWeight: 'bold',
+                color: 'white',
+                fontStyle: 'normal',
+              }}
+            >
+              piano
+            </span>
+          </span>
+          <span
+            style={{
+              color: 'white',
+              fontSize: '1.1rem',
+              marginTop: '0.3rem',
+              fontWeight: 'normal',
+              fontFamily: 'sans-serif',
+            }}
+          >
+            Memorizza facilmente creando dei cassetti
+          </span>
         </div>
+        <p className="text-gray-300 text-lg">clicca sugli accordi per esplorare i dettagli</p>
+      </div>
 
-        {/* Controlli categorie */}
-        <div className="flex justify-center mb-8">
-          <div className="bg-white rounded-xl p-2 shadow-lg">
-            {Object.keys(chordDatabase).map((category) => (
+      {/* Selettore accordi comuni/tutti */}
+      <div className="flex justify-center mb-6">
+        <label className="flex items-center gap-2 bg-gray-700 px-4 py-2 rounded-lg text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={showOnlyComuni}
+            onChange={e => setShowOnlyComuni(e.target.checked)}
+            className="accent-yellow-400"
+          />
+          Mostra solo accordi comuni
+        </label>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex gap-6">
+        {/* Mind Map */}
+        <div className="flex-1 space-y-6">
+          {Object.entries(chordData).map(([categoryKey, category]) => (
+            <div key={categoryKey} className="bg-gray-800 rounded-xl p-6 shadow-lg">
+              {/* Category Header */}
               <button
-                key={category}
-                onClick={() => {
-                  setSelectedCategory(category);
-                  setSelectedChord(Object.keys(chordDatabase[category])[0]);
-                }}
-                className={`px-8 py-4 mx-1 rounded-lg font-medium transition-all ${
-                  selectedCategory === category
-                    ? 'bg-teal-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200 hover:shadow-sm'
-                }`}
+                onClick={() => toggleCategory(categoryKey)}
+                className={`w-full flex items-center justify-between p-4 rounded-lg ${category.color} ${category.textColor} font-bold text-lg mb-4 hover:opacity-90 transition-opacity`}
               >
-                {category === 'triadi' ? 'Triadi' : 
-                 category === 'quadriadi' ? 'Quadriadi' : 
-                 'Accordi Estesi'}
+                <span>{category.title}</span>
+                {expandedCategories[categoryKey] ? <ChevronDown /> : <ChevronRight />}
               </button>
-            ))}
-          </div>
-        </div>
 
-        {/* Selezione nota di partenza */}
-        <div className="flex justify-center mb-8">
-          <div className="bg-white rounded-xl p-4 shadow-lg">
-            <h3 className="text-lg font-semibold text-center mb-3 text-gray-800">Nota di partenza</h3>
-            <div className="flex flex-wrap justify-center gap-2">
-              {allNotes.map((note) => (
-                <button
-                  key={note}
-                  onClick={() => setRootNote(note)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all min-w-[48px] ${
-                    rootNote === note
-                      ? 'bg-teal-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-sm'
-                  }`}
-                >
-                  {note}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Selezione accordo e info */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* Selezione accordo */}
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Seleziona Accordo</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {Object.keys(currentChords).map((chord) => {
-                  // Traspone il nome dell'accordo per la visualizzazione nella griglia
-                  const transposedChordName = getTransposedChordName(chord, currentChords[chord]).symbol;
-                  
-                  return (
-                    <button
-                      key={chord}
-                      onClick={() => setSelectedChord(chord)}
-                      className={`p-3 rounded-lg font-medium transition-all ${
-                        selectedChord === chord
-                          ? 'bg-teal-600 text-white shadow-md'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {transposedChordName}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Info accordo */}
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Informazioni Accordo</h3>
-              {currentChord ? (
-                <div className="space-y-3">
-                  <div>
-                    {(() => {
-                      const transposed = getTransposedChordName(selectedChord, originalChord);
+              {/* Subsections */}
+              {expandedCategories[categoryKey] && (
+                <div className="space-y-4">
+                  {Object.entries(category.subsections)
+                    .filter(([_, subsection]) => {
+                      if (!showOnlyComuni) return true;
+                      return subsection.chords.some(chord => chord.comune);
+                    })
+                    .map(([subsectionKey, subsection]) => {
+                      const subsectionExpandKey = `${categoryKey}-${subsectionKey}`;
+                      const isSubsectionExpanded = expandedSubsections[subsectionExpandKey];
                       return (
-                        <>
-                          <span className="font-medium text-teal-600">{transposed.symbol}</span>
-                          <span className="text-gray-600 ml-2">({transposed.name})</span>
-                        </>
+                        <div key={subsectionKey} className="bg-gray-700 rounded-lg p-4">
+                          {/* Subsection Header */}
+                          <button
+                            onClick={() => toggleSubsection(categoryKey, subsectionKey)}
+                            className="w-full flex items-center justify-between p-2 rounded bg-gray-600 text-gray-200 hover:bg-gray-500 transition-colors mb-3"
+                          >
+                            <span className="font-semibold text-sm">{subsection.title}</span>
+                            {isSubsectionExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </button>
+
+                          {/* Chords Grid */}
+                          {isSubsectionExpanded && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                              {subsection.chords
+                                .filter(chord => !showOnlyComuni || chord.comune)
+                                .map((chord, index) => (
+                                  <button
+                                    key={index}
+                                    onClick={() => handleChordClick(chord, categoryKey)}
+                                    className={`p-2 rounded-lg border-2 transition-all duration-200 hover:scale-105 ${
+                                      chord.comune 
+                                        ? 'bg-yellow-100 border-yellow-400 text-gray-900 font-bold' 
+                                        : 'bg-gray-600 border-gray-500 text-gray-200 hover:border-gray-400'
+                                    } ${selectedChord?.sigla === chord.sigla ? 'ring-2 ring-blue-400' : ''}`}
+                                  >
+                                    <div className="text-center">
+                                      <div className="font-mono text-sm mb-1">{chord.sigla}</div>
+                                      <div className="text-xs opacity-80 leading-tight">{chord.nome}</div>
+                                    </div>
+                                  </button>
+                                ))}
+                            </div>
+                          )}
+                        </div>
                       );
-                    })()}
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-800 font-medium">Note: </span>
-                    <span className="font-mono bg-gray-100 px-2 py-1 rounded text-gray-900">
-                      {currentChord.notes.map(note => note.slice(0, -1)).join(' - ')}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-800 font-medium">Intervalli: </span>
-                    <span className="font-mono bg-gray-100 px-2 py-1 rounded text-gray-900">
-                      {currentChord.intervals}
-                    </span>
-                  </div>
-                  <button
-                    onClick={playChord}
-                    disabled={isPlaying}
-                    className="flex items-center gap-2 bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50"
-                  >
-                    {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                    {isPlaying ? 'Riproduzione...' : 'Suona Accordo'}
-                    <Volume2 size={16} />
-                  </button>
-                </div>
-              ) : (
-                <div className="text-gray-500 text-center py-8">
-                  <p>Seleziona un accordo per vedere le informazioni</p>
-                  <p className="text-sm mt-2">Clicca su uno degli accordi qui a sinistra</p>
+                    })}
                 </div>
               )}
             </div>
+          ))}
+        </div>
+
+        {/* Detail Panel */}
+        {selectedChord && (
+          <div className="w-80 bg-gray-800 rounded-xl p-6 shadow-lg sticky top-6 h-fit">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-yellow-400">Dettagli Accordo</h3>
+              <button
+                onClick={() => setSelectedChord(null)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="text-3xl font-mono font-bold text-white mb-2">
+                  {selectedChord.sigla}
+                </div>
+                <div className="text-lg text-gray-300">
+                  {selectedChord.nome}
+                </div>
+                {selectedChord.comune && (
+                  <div className="inline-block bg-yellow-400 text-gray-900 px-2 py-1 rounded text-sm font-bold mt-2">
+                    COMUNE
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-gray-600 pt-4">
+                <div className="mb-3">
+                  <h4 className="font-semibold text-blue-400 mb-1">Formula:</h4>
+                  <div className="font-mono text-lg bg-gray-700 p-2 rounded">
+                    {selectedChord.formula}
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <h4 className="font-semibold text-green-400 mb-1">Note (in Do):</h4>
+                  <div className="font-mono text-lg bg-gray-700 p-2 rounded">
+                    {selectedChord.note}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="font-semibold text-purple-400 mb-1">Categoria:</h4>
+                  <div className="text-sm bg-gray-700 p-2 rounded capitalize">
+                    {chordData[selectedChord.category]?.title}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 text-sm text-gray-400 pt-4 border-t border-gray-600">
+                <Volume2 size={16} />
+                <span>Clicca su altri accordi per esplorare</span>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Tastiera Piano */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-lg font-semibold mb-4 text-center">Tastiera Piano</h3>
-          {renderPiano()}
-          <p className="text-center text-sm text-gray-500 mt-4">
-            I tasti evidenziati in blu petrolio fanno parte dell'accordo selezionato. Clicca sui tasti per sentire le singole note.
-          </p>
-        </div>
+      {/* Legend */}
+      <div className="mt-8 bg-gray-800 rounded-xl p-6">
+        <h3 className="text-lg font-semibold mb-4 text-center">Legenda</h3>
+        <div className="flex flex-wrap justify-center gap-6 text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-yellow-400 rounded"></div>
+            <span>Accordi comuni</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-gray-600 rounded"></div>
+            <span>Accordi avanzati</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-blue-500 rounded"></div>
+            <span>Triadi (3 note)</span>
+          </div>
 
-        {/* Footer */}
-        <div className="text-center mt-8 text-gray-500 text-sm">
-          <p>Basato sulla guida "Accordi Pianoforte" di Silvia Platania - Sognandoilpiano</p>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-green-500 rounded"></div>
+            <span>Quadriadi (4 note)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-purple-500 rounded"></div>
+            <span>Accordi estesi (5-7 note)</span>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default PianoChordApp;
+export default ChordMindMap;
