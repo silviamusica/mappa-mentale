@@ -6,11 +6,35 @@ const PianoChordApp = () => {
   const [selectedCategory, setSelectedCategory] = useState('triadi');
   const [selectedChord, setSelectedChord] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [rootNote, setRootNote] = useState('C'); // Nota di partenza per trasposizione
   
   // Stati per animazioni e feedback visivo
   const [activeKeys, setActiveKeys] = useState(new Set());
   const [keyAnimations, setKeyAnimations] = useState(new Map());
   const audioContextRef = useRef(null);
+
+  // Tutte le note disponibili per trasposizione
+  const allNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+  // Funzione per trasporre una nota
+  const transposeNote = (note, semitones) => {
+    const noteWithoutOctave = note.slice(0, -1);
+    const octave = parseInt(note.slice(-1));
+    const noteIndex = allNotes.indexOf(noteWithoutOctave);
+    
+    if (noteIndex === -1) return note;
+    
+    let newNoteIndex = (noteIndex + semitones) % 12;
+    if (newNoteIndex < 0) newNoteIndex += 12;
+    
+    let newOctave = octave + Math.floor((noteIndex + semitones) / 12);
+    if (noteIndex + semitones < 0) newOctave--;
+    
+    return allNotes[newNoteIndex] + newOctave;
+  };
+
+  // Calcola i semitoni di trasposizione dalla nota C
+  const transpositionSemitones = allNotes.indexOf(rootNote);
 
   // All piano keys for display (2 ottave complete: C3-C5)
   const pianoKeys = [
@@ -83,7 +107,38 @@ const PianoChordApp = () => {
   };
 
   const currentChords = chordDatabase[selectedCategory];
-  const currentChord = currentChords[selectedChord];
+  const originalChord = currentChords[selectedChord];
+  
+  // Funzione per trasporre il nome dell'accordo
+  const getTransposedChordName = (chordSymbol, originalChord) => {
+    if (!originalChord) return { symbol: chordSymbol, name: chordSymbol };
+    
+    if (rootNote === 'C') {
+      return { symbol: chordSymbol, name: originalChord.name };
+    }
+    
+    // Sostituisce la C iniziale con la nuova nota di partenza
+    const transposedSymbol = chordSymbol.replace(/^C/, rootNote);
+    const transposedName = originalChord.name.replace(/^Do/, 
+      rootNote === 'C#' || rootNote === 'D#' || rootNote === 'F#' || rootNote === 'G#' || rootNote === 'A#' 
+        ? rootNote.replace('#', ' diesis')
+        : rootNote === 'D' ? 'Re'
+        : rootNote === 'E' ? 'Mi' 
+        : rootNote === 'F' ? 'Fa'
+        : rootNote === 'G' ? 'Sol'
+        : rootNote === 'A' ? 'La'
+        : rootNote === 'B' ? 'Si'
+        : rootNote
+    );
+    
+    return { symbol: transposedSymbol, name: transposedName };
+  };
+
+  // Crea l'accordo trasposto
+  const currentChord = originalChord ? {
+    ...originalChord,
+    notes: originalChord.notes.map(note => transposeNote(note, transpositionSemitones))
+  } : null;
 
   // Funzione per verificare se un tasto è parte dell'accordo
   const isKeyInChord = (note) => {
@@ -293,6 +348,28 @@ const PianoChordApp = () => {
           </div>
         </div>
 
+        {/* Selezione nota di partenza */}
+        <div className="flex justify-center mb-8">
+          <div className="bg-white rounded-xl p-4 shadow-lg">
+            <h3 className="text-lg font-semibold text-center mb-3 text-gray-800">Nota di partenza</h3>
+            <div className="flex flex-wrap justify-center gap-2">
+              {allNotes.map((note) => (
+                <button
+                  key={note}
+                  onClick={() => setRootNote(note)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all min-w-[48px] ${
+                    rootNote === note
+                      ? 'bg-teal-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-sm'
+                  }`}
+                >
+                  {note}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Selezione accordo e info */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <div className="grid md:grid-cols-2 gap-6">
@@ -300,19 +377,24 @@ const PianoChordApp = () => {
             <div>
               <h3 className="text-lg font-semibold mb-4">Seleziona Accordo</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {Object.keys(currentChords).map((chord) => (
-                  <button
-                    key={chord}
-                    onClick={() => setSelectedChord(chord)}
-                    className={`p-3 rounded-lg font-medium transition-all ${
-                      selectedChord === chord
-                        ? 'bg-teal-600 text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {chord}
-                  </button>
-                ))}
+                {Object.keys(currentChords).map((chord) => {
+                  // Traspone il nome dell'accordo per la visualizzazione nella griglia
+                  const transposedChordName = getTransposedChordName(chord, currentChords[chord]).symbol;
+                  
+                  return (
+                    <button
+                      key={chord}
+                      onClick={() => setSelectedChord(chord)}
+                      className={`p-3 rounded-lg font-medium transition-all ${
+                        selectedChord === chord
+                          ? 'bg-teal-600 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {transposedChordName}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -322,8 +404,15 @@ const PianoChordApp = () => {
               {currentChord ? (
                 <div className="space-y-3">
                   <div>
-                    <span className="font-medium text-teal-600">{selectedChord}</span>
-                    <span className="text-gray-600 ml-2">({currentChord.name})</span>
+                    {(() => {
+                      const transposed = getTransposedChordName(selectedChord, originalChord);
+                      return (
+                        <>
+                          <span className="font-medium text-teal-600">{transposed.symbol}</span>
+                          <span className="text-gray-600 ml-2">({transposed.name})</span>
+                        </>
+                      );
+                    })()}
                   </div>
                   <div>
                     <span className="text-sm text-gray-800 font-medium">Note: </span>
