@@ -4,7 +4,7 @@ import { Play, Pause, Volume2 } from 'lucide-react';
 const PianoChordApp = () => {
   // Stati principali
   const [selectedCategory, setSelectedCategory] = useState('triadi');
-  const [selectedChord, setSelectedChord] = useState('C');
+  const [selectedChord, setSelectedChord] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
   
   // Stati per animazioni e feedback visivo
@@ -116,13 +116,16 @@ const PianoChordApp = () => {
     gainNode.connect(audioContext.destination);
     
     oscillator.frequency.setValueAtTime(getNoteFrequency(note), audioContext.currentTime);
-    oscillator.type = 'sine';
+    // Uso triangle wave anche per le note singole
+    oscillator.type = 'triangle';
     
-    gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+    // Attacco più netto anche per le note singole
+    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.4, audioContext.currentTime + 0.01); // Attacco rapidissimo
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.8);
     
     oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.5);
+    oscillator.stop(audioContext.currentTime + 0.8);
   };
 
   // Funzione per suonare l'accordo
@@ -137,30 +140,35 @@ const PianoChordApp = () => {
       }
       
       const audioContext = audioContextRef.current;
-      const gainNode = audioContext.createGain();
-      gainNode.connect(audioContext.destination);
-      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 2);
+      const masterGain = audioContext.createGain();
+      masterGain.connect(audioContext.destination);
+      
+      // Volume master più alto e attacco più netto
+      masterGain.gain.setValueAtTime(0.4, audioContext.currentTime);
+      masterGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 3);
 
       currentChord.notes.forEach((note, index) => {
         const oscillator = audioContext.createOscillator();
         const noteGain = audioContext.createGain();
         
         oscillator.connect(noteGain);
-        noteGain.connect(gainNode);
+        noteGain.connect(masterGain);
         
         oscillator.frequency.setValueAtTime(getNoteFrequency(note), audioContext.currentTime);
-        oscillator.type = 'sine';
+        // Uso triangle wave per un suono più pieno
+        oscillator.type = 'triangle';
         
+        // Attacco molto più netto e immediato
         noteGain.gain.setValueAtTime(0, audioContext.currentTime);
-        noteGain.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.1);
-        noteGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 2);
+        noteGain.gain.linearRampToValueAtTime(0.8, audioContext.currentTime + 0.02); // Attacco rapidissimo
+        noteGain.gain.linearRampToValueAtTime(0.6, audioContext.currentTime + 0.3);  // Sustain più alto
+        noteGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 3);
         
         oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 2);
+        oscillator.stop(audioContext.currentTime + 3);
       });
 
-      setTimeout(() => setIsPlaying(false), 2000);
+      setTimeout(() => setIsPlaying(false), 3000);
     } catch (error) {
       console.error('Errore nella riproduzione audio:', error);
       setIsPlaying(false);
@@ -198,9 +206,6 @@ const PianoChordApp = () => {
                       animationKey: animationKey
                     }}
                   >
-                    {isActive && (
-                      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-3 h-3 rounded-full bg-teal-600" />
-                    )}
                   </button>
                 );
               })}
@@ -243,9 +248,6 @@ const PianoChordApp = () => {
                       ${isActive ? 'bg-teal-600 border-teal-500' : 'bg-black'}
                     `}
                   >
-                    {isActive && (
-                      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-2 h-2 rounded-full bg-white" />
-                    )}
                   </button>
                 );
               })}
@@ -261,13 +263,15 @@ const PianoChordApp = () => {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">Accordi Pianoforte</h1>
-          <p className="text-gray-600">Impara gli accordi Pop/Jazz • Triadi & Quadriadi</p>
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">Allenatore di accordi</h1>
+          <div className="text-3xl mb-4" style={{fontFamily: 'serif'}}>
+            <span className="text-black font-normal">sognando</span><span className="text-red-600 font-bold italic">il</span><span className="text-black font-bold">piano</span>
+          </div>
         </div>
 
         {/* Controlli categorie */}
         <div className="flex justify-center mb-8">
-          <div className="bg-white rounded-lg p-1 shadow-lg">
+          <div className="bg-white rounded-xl p-2 shadow-lg">
             {Object.keys(chordDatabase).map((category) => (
               <button
                 key={category}
@@ -275,10 +279,10 @@ const PianoChordApp = () => {
                   setSelectedCategory(category);
                   setSelectedChord(Object.keys(chordDatabase[category])[0]);
                 }}
-                className={`px-6 py-3 rounded-md font-medium transition-all ${
+                className={`px-8 py-4 mx-1 rounded-lg font-medium transition-all ${
                   selectedCategory === category
                     ? 'bg-teal-600 text-white shadow-md'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200 hover:shadow-sm'
                 }`}
               >
                 {category === 'triadi' ? 'Triadi' : 
@@ -315,21 +319,21 @@ const PianoChordApp = () => {
             {/* Info accordo */}
             <div>
               <h3 className="text-lg font-semibold mb-4">Informazioni Accordo</h3>
-              {currentChord && (
+              {currentChord ? (
                 <div className="space-y-3">
                   <div>
                     <span className="font-medium text-teal-600">{selectedChord}</span>
                     <span className="text-gray-600 ml-2">({currentChord.name})</span>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-500">Note: </span>
-                    <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+                    <span className="text-sm text-gray-800 font-medium">Note: </span>
+                    <span className="font-mono bg-gray-100 px-2 py-1 rounded text-gray-900">
                       {currentChord.notes.map(note => note.slice(0, -1)).join(' - ')}
                     </span>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-500">Intervalli: </span>
-                    <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+                    <span className="text-sm text-gray-800 font-medium">Intervalli: </span>
+                    <span className="font-mono bg-gray-100 px-2 py-1 rounded text-gray-900">
                       {currentChord.intervals}
                     </span>
                   </div>
@@ -342,6 +346,11 @@ const PianoChordApp = () => {
                     {isPlaying ? 'Riproduzione...' : 'Suona Accordo'}
                     <Volume2 size={16} />
                   </button>
+                </div>
+              ) : (
+                <div className="text-gray-500 text-center py-8">
+                  <p>Seleziona un accordo per vedere le informazioni</p>
+                  <p className="text-sm mt-2">Clicca su uno degli accordi qui a sinistra</p>
                 </div>
               )}
             </div>
