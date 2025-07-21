@@ -13,6 +13,16 @@ const ChordMindMap = () => {
   });
   const [expandedSubsections, setExpandedSubsections] = useState({});
   const [showOnlyComuni, setShowOnlyComuni] = useState(false);
+  const [showMappaGenerale, setShowMappaGenerale] = useState(false);
+  const [expandedMappa, setExpandedMappa] = useState({
+    triadi: true,
+    quadriadi: false,
+    estesi: false
+  });
+
+  const toggleMappaCategory = (cat) => {
+    setExpandedMappa(prev => ({ ...prev, [cat]: !prev[cat] }));
+  };
 
   const chordData = {
     triadi: {
@@ -381,21 +391,72 @@ const ChordMindMap = () => {
 
       {/* Bottoni legenda minimal in fondo, su sfondo trasparente */}
       {modalita === 'miniaiutara' && (
-        <div className="mt-10 flex justify-center gap-4" style={{background:'transparent', boxShadow:'none', padding:0}}>
+        <div className="mt-10 flex flex-col items-center" style={{background:'transparent', boxShadow:'none', padding:0}}>
+          <div className="flex justify-center gap-4 w-full">
+            <button
+              onClick={() => setShowOnlyComuni(true)}
+              className="px-6 py-2 rounded-2xl font-extrabold text-lg bg-yellow-100 text-yellow-900 transition-all duration-150 shadow-none"
+              style={{opacity: 1, cursor: 'pointer', border: 'none'}}
+            >
+              Accordi comuni
+            </button>
+            <button
+              onClick={() => setShowOnlyComuni(false)}
+              className="px-6 py-2 rounded-2xl font-bold text-lg bg-yellow-50 text-cyan-900 transition-all duration-150 shadow-none"
+              style={{opacity: 1, cursor: 'pointer', border: 'none'}}
+            >
+              Accordi avanzati
+            </button>
+          </div>
           <button
-            onClick={() => setShowOnlyComuni(true)}
-            className="px-6 py-2 rounded-2xl font-extrabold text-lg bg-yellow-100 text-yellow-900 transition-all duration-150 shadow-none"
+            className="mt-4 px-8 py-2 rounded-2xl font-bold text-lg bg-yellow-50 text-cyan-900 transition-all duration-150 shadow-none"
             style={{opacity: 1, cursor: 'pointer', border: 'none'}}
+            onClick={() => setShowMappaGenerale(v => !v)}
           >
-            Accordi comuni
+            Mappa generale
           </button>
-          <button
-            onClick={() => setShowOnlyComuni(false)}
-            className="px-6 py-2 rounded-2xl font-bold text-lg bg-yellow-50 text-cyan-900 transition-all duration-150 shadow-none"
-            style={{opacity: 1, cursor: 'pointer', border: 'none'}}
-          >
-            Accordi avanzati
-          </button>
+
+          {showMappaGenerale && (
+            <div className="w-full max-w-2xl mt-8 mb-8 bg-white/90 rounded-2xl p-6 shadow-lg border border-yellow-100 text-cyan-900">
+              <div className="text-center text-2xl font-bold mb-4 flex items-center justify-center gap-2">
+                <span role="img" aria-label="nota musicale">🎵</span> Accordi
+              </div>
+              <div className="flex flex-col gap-2">
+                {Object.entries(chordData).map(([catKey, cat]) => (
+                  <div key={catKey}>
+                    <button
+                      className="flex items-center gap-2 font-bold text-lg py-1 px-2 hover:bg-yellow-50 rounded transition"
+                      onClick={() => toggleMappaCategory(catKey)}
+                    >
+                      <span>{expandedMappa[catKey] ? '▼' : '▶'}</span>
+                      {cat.title}
+                    </button>
+                    {expandedMappa[catKey] && (
+                      <div className="ml-8 border-l-2 border-yellow-100 pl-4 mt-1">
+                        {Object.entries(cat.subsections).map(([subKey, sub]) => (
+                          <div key={subKey} className="mb-2">
+                            <div className="font-semibold text-base mb-1">{sub.title}</div>
+                            <div className="flex flex-wrap gap-2 ml-4">
+                              {sub.chords.map((chord, idx) => (
+                                <button
+                                  key={idx}
+                                  className={`px-3 py-1 rounded-xl border-none text-base transition font-mono ${chord.comune ? 'font-extrabold bg-yellow-100 text-yellow-900' : 'font-semibold bg-yellow-50 text-cyan-900'} hover:bg-yellow-200`}
+                                  style={{boxShadow:'none'}}
+                                  onClick={() => handleChordClick(chord, catKey, {clientY: window.innerHeight/2})}
+                                >
+                                  {chord.sigla}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
