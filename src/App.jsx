@@ -146,6 +146,8 @@ const ChordMindMap = () => {
     setSelectedChord({ ...chord, category });
   };
 
+  // Sticky come versione precedente
+
   return (
     <div
       className="w-full max-w-7xl mx-auto p-6 min-h-screen text-white"
@@ -232,7 +234,7 @@ const ChordMindMap = () => {
           {Object.entries(chordData).map(([categoryKey, category]) => (
             <div
               key={categoryKey}
-              className="bg-gray-900 rounded-2xl p-8 shadow-sm border border-gray-800"
+              className="bg-gray-900 rounded-2xl p-8 shadow-sm"
             >
               {/* Category Header */}
               <button
@@ -266,7 +268,7 @@ const ChordMindMap = () => {
                       const subsectionExpandKey = `${categoryKey}-${subsectionKey}`;
                       const isSubsectionExpanded = expandedSubsections[subsectionExpandKey];
                       return (
-                        <div key={subsectionKey} className="bg-gray-800 rounded-xl p-5 border border-gray-700 mb-4 ml-3 md:ml-6">
+                        <div key={subsectionKey} className="bg-gray-800 rounded-xl p-5 mb-4 ml-3 md:ml-6">
                           {/* Subsection Header */}
                           <button
                             onClick={() => toggleSubsection(categoryKey, subsectionKey)}
@@ -312,59 +314,67 @@ const ChordMindMap = () => {
 
         {/* Detail Panel */}
         {selectedChord && (
-          <div className="w-80 bg-gray-900 rounded-2xl p-7 shadow-sm sticky top-6 h-fit border border-cyan-900">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-cyan-300 tracking-wide">Dettagli accordo</h3>
-              <button
-                onClick={() => setSelectedChord(null)}
-                className="text-gray-400 hover:text-cyan-200 transition-colors"
-                aria-label="Chiudi dettagli"
+          <>
+            {/* Overlay */}
+            <div
+              className="fixed inset-0 bg-black bg-opacity-60 z-40 animate-fadein"
+              onClick={() => setSelectedChord(null)}
+            ></div>
+            {/* Modal Popup */}
+            <div className="fixed inset-0 z-50 flex items-center justify-center px-2 py-8">
+              <div
+                className="w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl bg-gray-900 rounded-2xl p-4 sm:p-6 md:p-7 shadow-lg max-h-[80vh] overflow-y-auto relative"
+                onClick={e => e.stopPropagation()}
               >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="text-center mb-2">
-                <div className="text-2xl font-mono font-bold text-cyan-100 mb-1 tracking-wide">
-                  {selectedChord.sigla}
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-cyan-300 tracking-wide">Dettagli accordo</h3>
+                  <button
+                    onClick={() => setSelectedChord(null)}
+                    className="text-gray-400 hover:text-cyan-200 transition-colors"
+                    aria-label="Chiudi dettagli"
+                  >
+                    <X size={20} />
+                  </button>
                 </div>
-                <div className="text-base text-gray-300 mb-1">
-                  {selectedChord.nome}
-                </div>
-                {selectedChord.comune && (
-                  <div className="inline-block bg-yellow-400 text-gray-900 px-2 py-1 rounded text-xs font-bold mt-1">
-                    comune
+                <div className="space-y-4">
+                  <div className="text-center mb-2">
+                    <div className="text-2xl font-mono font-bold text-cyan-100 mb-1 tracking-wide">
+                      {selectedChord.sigla}
+                    </div>
+                    <div className="text-base text-gray-300 mb-1">
+                      {selectedChord.nome}
+                    </div>
+                    {selectedChord.comune && (
+                      <div className="inline-block bg-yellow-400 text-gray-900 px-2 py-1 rounded text-xs font-bold mt-1">
+                        comune
+                      </div>
+                    )}
                   </div>
-                )}
+                  <div className="border-t border-cyan-900 pt-4">
+                    <div className="mb-2">
+                      <h4 className="font-semibold text-cyan-400 mb-1 text-xs uppercase tracking-wide">Formula</h4>
+                      <div className="font-mono text-base bg-gray-800 p-2 rounded-lg text-cyan-100">
+                        {selectedChord.formula}
+                      </div>
+                    </div>
+                    <div className="mb-2">
+                      <h4 className="font-semibold text-cyan-400 mb-1 text-xs uppercase tracking-wide">Note (in Do)</h4>
+                      <div className="font-mono text-base bg-gray-800 p-2 rounded-lg text-cyan-100">
+                        {selectedChord.note}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-cyan-400 mb-1 text-xs uppercase tracking-wide">Categoria</h4>
+                      <div className="text-xs bg-gray-800 p-2 rounded-lg capitalize text-cyan-100">
+                        {chordData[selectedChord.category]?.title}
+                      </div>
+                    </div>
+                  </div>
+                  {/* ...nessun messaggio aggiuntivo... */}
+                </div>
               </div>
-
-              <div className="border-t border-cyan-900 pt-4">
-                <div className="mb-2">
-                  <h4 className="font-semibold text-cyan-400 mb-1 text-xs uppercase tracking-wide">Formula</h4>
-                  <div className="font-mono text-base bg-gray-800 p-2 rounded-lg text-cyan-100">
-                    {selectedChord.formula}
-                  </div>
-                </div>
-
-                <div className="mb-2">
-                  <h4 className="font-semibold text-cyan-400 mb-1 text-xs uppercase tracking-wide">Note (in Do)</h4>
-                  <div className="font-mono text-base bg-gray-800 p-2 rounded-lg text-cyan-100">
-                    {selectedChord.note}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-cyan-400 mb-1 text-xs uppercase tracking-wide">Categoria</h4>
-                  <div className="text-xs bg-gray-800 p-2 rounded-lg capitalize text-cyan-100">
-                    {chordData[selectedChord.category]?.title}
-                  </div>
-                </div>
-              </div>
-
-              {/* ...nessun messaggio aggiuntivo... */}
             </div>
-          </div>
+          </>
         )}
       </div>
 
