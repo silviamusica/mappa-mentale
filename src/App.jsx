@@ -236,7 +236,7 @@ const ChordMindMap = () => {
       {/* Main Content */}
       <div className="flex gap-10">
         {/* Mind Map */}
-      <div className="flex-1 space-y-8 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-2xl p-8 shadow-sm">
+      <div className="flex-1 space-y-8 bg-yellow-50 rounded-2xl p-8 shadow-sm">
         {Object.entries(chordData).map(([categoryKey, category]) => (
           <div
             key={categoryKey}
@@ -272,7 +272,7 @@ const ChordMindMap = () => {
                           {/* Subsection Header */}
                           <button
                             onClick={() => toggleSubsection(categoryKey, subsectionKey)}
-                            className="w-full flex items-center justify-between p-2 rounded-lg bg-gradient-to-r from-yellow-300 to-orange-200 text-yellow-900 font-bold hover:from-yellow-400 hover:to-orange-300 transition-colors mb-2 shadow-none"
+                            className="w-full flex items-center justify-between p-2 rounded-lg bg-yellow-50 text-yellow-900 font-bold mb-2 shadow-none"
                             style={{boxShadow: 'none'}}
                           >
                             <span className="font-bold text-base tracking-wide drop-shadow-sm">{subsection.title}</span>
