@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Music, Volume2, X, ChevronDown, ChevronRight } from 'lucide-react';
 
 const ChordMindMap = () => {
+  // Modalità: miniaiutara o altro
+  const [modalita] = useState('miniaiutara');
   const [selectedChord, setSelectedChord] = useState(null);
   const [popupPosition, setPopupPosition] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState({
@@ -234,11 +236,11 @@ const ChordMindMap = () => {
       {/* Main Content */}
       <div className="flex gap-10">
         {/* Mind Map */}
-      <div className="flex-1 space-y-8 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-2xl p-8 shadow-sm border border-yellow-200">
+      <div className="flex-1 space-y-8 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-2xl p-8 shadow-sm">
         {Object.entries(chordData).map(([categoryKey, category]) => (
           <div
             key={categoryKey}
-            className="bg-transparent rounded-2xl p-0 shadow-none border-none"
+            className="bg-transparent rounded-2xl p-0 shadow-none"
           >
             {/* Category Header */}
             <button
@@ -247,7 +249,6 @@ const ChordMindMap = () => {
                 ${categoryKey === 'triadi' ? 'bg-[#0a1833] text-white' : 'bg-[#0a1833] text-white'}`}
               style={{
                 boxShadow: 'none',
-                border: 'none',
                 letterSpacing: '0.03em',
               }}
             >
@@ -267,11 +268,11 @@ const ChordMindMap = () => {
                       const subsectionExpandKey = `${categoryKey}-${subsectionKey}`;
                       const isSubsectionExpanded = expandedSubsections[subsectionExpandKey];
                       return (
-                        <div key={subsectionKey} className="bg-gray-50 rounded-xl p-5 mb-4 ml-3 md:ml-6 border border-gray-200">
+                        <div key={subsectionKey} className="bg-[#183a5a] rounded-xl p-5 mb-4 ml-3 md:ml-6 shadow-sm">
                           {/* Subsection Header */}
                           <button
                             onClick={() => toggleSubsection(categoryKey, subsectionKey)}
-                            className="w-full flex items-center justify-between p-2 rounded-lg bg-gradient-to-r from-yellow-300 to-orange-200 text-yellow-900 font-bold hover:from-yellow-400 hover:to-orange-300 transition-colors mb-2 border-2 border-yellow-500 shadow-none"
+                            className="w-full flex items-center justify-between p-2 rounded-lg bg-gradient-to-r from-yellow-300 to-orange-200 text-yellow-900 font-bold hover:from-yellow-400 hover:to-orange-300 transition-colors mb-2 shadow-none"
                             style={{boxShadow: 'none'}}
                           >
                             <span className="font-bold text-base tracking-wide drop-shadow-sm">{subsection.title}</span>
@@ -287,10 +288,10 @@ const ChordMindMap = () => {
                                   <button
                                     key={index}
                                     onClick={e => handleChordClick(chord, categoryKey, e)}
-                                    className={`p-4 rounded-2xl border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-base font-mono shadow-md group 
+                                    className={`p-4 rounded-2xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-base font-mono shadow-md group 
                                       ${chord.comune
-                                        ? 'border-orange-400 bg-yellow-100 text-yellow-900 font-extrabold hover:bg-yellow-200 hover:shadow-lg'
-                                        : 'border-cyan-300 bg-white text-cyan-900 font-semibold hover:bg-gray-100 hover:shadow-lg'}
+                                        ? 'bg-yellow-100 text-yellow-900 font-extrabold hover:bg-yellow-200 hover:shadow-lg'
+                                        : 'bg-white text-cyan-900 font-semibold hover:bg-gray-100 hover:shadow-lg'}
                                       ${selectedChord?.sigla === chord.sigla ? 'ring-2 ring-cyan-400' : ''}`}
                                     style={{boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)'}}
                                   >
@@ -348,27 +349,27 @@ const ChordMindMap = () => {
                       <span className="text-gray-700">{selectedChord.nome}</span>
                     </div>
                     {selectedChord.comune && (
-                      <div className="inline-block bg-yellow-300 text-gray-900 px-2 py-1 rounded text-xs font-bold mt-1 border border-yellow-400">
+                      <div className="inline-block bg-yellow-300 text-gray-900 px-2 py-1 rounded text-xs font-bold mt-1">
                         comune
                       </div>
                     )}
                   </div>
-                  <div className="border-t border-cyan-900 pt-4">
+                  <div className="pt-4">
                     <div className="mb-2">
                       <h4 className="font-semibold text-cyan-700 mb-1 text-xs uppercase tracking-wide">Formula</h4>
-                      <div className="font-mono text-base bg-gray-200 p-2 rounded-lg text-cyan-900 border border-cyan-200">
+                      <div className="font-mono text-base bg-gray-200 p-2 rounded-lg text-cyan-900">
                         {selectedChord.formula}
                       </div>
                     </div>
                     <div className="mb-2">
                       <h4 className="font-semibold text-cyan-700 mb-1 text-xs uppercase tracking-wide">Note (in Do)</h4>
-                      <div className="font-mono text-base bg-gray-200 p-2 rounded-lg text-cyan-900 border border-cyan-200">
+                      <div className="font-mono text-base bg-gray-200 p-2 rounded-lg text-cyan-900">
                         {selectedChord.note}
                       </div>
                     </div>
                   </div>
                   {/* Messaggio di chiusura */}
-                  <div className="text-center text-xs text-cyan-700 opacity-80 border-t border-cyan-200 mt-2 pt-2">
+                  <div className="text-center text-xs text-cyan-700 opacity-80 mt-2 pt-2">
                     Per chiudere premi la <span className="font-bold">X</span> in alto a destra
                   </div>
                 </div>
@@ -378,32 +379,25 @@ const ChordMindMap = () => {
         )}
       </div>
 
-      {/* Legend */}
-      <div className="mt-10 bg-gray-900 rounded-2xl p-6 border border-gray-800">
-        <h3 className="text-base font-semibold mb-4 text-center text-cyan-300 tracking-wide">Legenda</h3>
-        <div className="flex flex-wrap justify-center gap-5 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-yellow-400 rounded"></div>
-            <span className="text-yellow-100">Accordi comuni</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-gray-600 rounded"></div>
-            <span className="text-gray-300">Accordi avanzati</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-cyan-900 rounded"></div>
-            <span className="text-cyan-100">Triadi</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-cyan-900 rounded"></div>
-            <span className="text-cyan-100">Quadriadi</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-cyan-900 rounded"></div>
-            <span className="text-cyan-100">Estesi</span>
-          </div>
+      {/* Bottoni legenda minimal in fondo, su sfondo trasparente */}
+      {modalita === 'miniaiutara' && (
+        <div className="mt-10 flex justify-center gap-4" style={{background:'transparent', boxShadow:'none', padding:0}}>
+          <button
+            onClick={() => setShowOnlyComuni(true)}
+            className="px-6 py-2 rounded-2xl font-extrabold text-lg bg-yellow-100 text-yellow-900 transition-all duration-150 shadow-none"
+            style={{opacity: 1, cursor: 'pointer', border: 'none'}}
+          >
+            Accordi comuni
+          </button>
+          <button
+            onClick={() => setShowOnlyComuni(false)}
+            className="px-6 py-2 rounded-2xl font-bold text-lg bg-white text-cyan-900 transition-all duration-150 shadow-none"
+            style={{opacity: 1, cursor: 'pointer', border: 'none'}}
+          >
+            Accordi avanzati
+          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 };
