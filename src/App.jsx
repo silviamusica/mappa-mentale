@@ -291,7 +291,7 @@ const ChordMindMap = () => {
                                     className={`p-4 rounded-2xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-base font-mono shadow-md group 
                                       ${chord.comune
                                         ? 'bg-yellow-100 text-yellow-900 font-extrabold hover:bg-yellow-200 hover:shadow-lg'
-                                        : 'bg-white text-cyan-900 font-semibold hover:bg-gray-100 hover:shadow-lg'}
+                                        : 'bg-yellow-50 text-cyan-900 font-semibold hover:bg-gray-100 hover:shadow-lg'}
                                       ${selectedChord?.sigla === chord.sigla ? 'ring-2 ring-cyan-400' : ''}`}
                                     style={{boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)'}}
                                   >
@@ -391,7 +391,7 @@ const ChordMindMap = () => {
           </button>
           <button
             onClick={() => setShowOnlyComuni(false)}
-            className="px-6 py-2 rounded-2xl font-bold text-lg bg-white text-cyan-900 transition-all duration-150 shadow-none"
+            className="px-6 py-2 rounded-2xl font-bold text-lg bg-yellow-50 text-cyan-900 transition-all duration-150 shadow-none"
             style={{opacity: 1, cursor: 'pointer', border: 'none'}}
           >
             Accordi avanzati
