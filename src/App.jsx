@@ -3,6 +3,7 @@ import { Music, Volume2, X, ChevronDown, ChevronRight } from 'lucide-react';
 
 const ChordMindMap = () => {
   const [selectedChord, setSelectedChord] = useState(null);
+  const [popupPosition, setPopupPosition] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState({
     triadi: true,
     quadriadi: true,
@@ -142,7 +143,10 @@ const ChordMindMap = () => {
     }));
   };
 
-  const handleChordClick = (chord, category) => {
+  const handleChordClick = (chord, category, event) => {
+    // Prendi la posizione Y del click rispetto alla viewport
+    const y = event?.clientY || window.innerHeight / 2;
+    setPopupPosition({ top: y });
     setSelectedChord({ ...chord, category });
   };
 
@@ -230,31 +234,26 @@ const ChordMindMap = () => {
       {/* Main Content */}
       <div className="flex gap-10">
         {/* Mind Map */}
-        <div className="flex-1 space-y-8">
-          {Object.entries(chordData).map(([categoryKey, category]) => (
-            <div
-              key={categoryKey}
-              className="bg-gray-900 rounded-2xl p-8 shadow-sm"
+      <div className="flex-1 space-y-8 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-2xl p-8 shadow-sm border border-yellow-200">
+        {Object.entries(chordData).map(([categoryKey, category]) => (
+          <div
+            key={categoryKey}
+            className="bg-transparent rounded-2xl p-0 shadow-none border-none"
+          >
+            {/* Category Header */}
+            <button
+              onClick={() => toggleCategory(categoryKey)}
+              className={`w-full flex items-center justify-between p-4 rounded-xl font-semibold text-lg mb-6 shadow-none hover:opacity-95 transition-opacity border-none 
+                ${categoryKey === 'triadi' ? 'bg-[#0a1833] text-white' : 'bg-[#0a1833] text-white'}`}
+              style={{
+                boxShadow: 'none',
+                border: 'none',
+                letterSpacing: '0.03em',
+              }}
             >
-              {/* Category Header */}
-              <button
-                onClick={() => toggleCategory(categoryKey)}
-                className={`w-full flex items-center justify-between p-4 rounded-xl font-semibold text-lg mb-6 shadow-none hover:opacity-95 transition-opacity border-none`}
-                style={{
-                  background:
-                    categoryKey === 'triadi' ? '#4a6fa5'
-                    : categoryKey === 'quadriadi' ? '#5fb9b0'
-                    : categoryKey === 'estesi' ? '#b7a7e9'
-                    : '#3399cc',
-                  color: '#fff',
-                  boxShadow: 'none',
-                  border: 'none',
-                  letterSpacing: '0.03em',
-                }}
-              >
-                <span>{category.title}</span>
-                {expandedCategories[categoryKey] ? <ChevronDown /> : <ChevronRight />}
-              </button>
+              <span>{category.title}</span>
+              {expandedCategories[categoryKey] ? <ChevronDown /> : <ChevronRight />}
+            </button>
 
               {/* Subsections */}
               {expandedCategories[categoryKey] && (
@@ -268,15 +267,15 @@ const ChordMindMap = () => {
                       const subsectionExpandKey = `${categoryKey}-${subsectionKey}`;
                       const isSubsectionExpanded = expandedSubsections[subsectionExpandKey];
                       return (
-                        <div key={subsectionKey} className="bg-gray-800 rounded-xl p-5 mb-4 ml-3 md:ml-6">
+                        <div key={subsectionKey} className="bg-gray-50 rounded-xl p-5 mb-4 ml-3 md:ml-6 border border-gray-200">
                           {/* Subsection Header */}
                           <button
                             onClick={() => toggleSubsection(categoryKey, subsectionKey)}
-                            className="w-full flex items-center justify-between p-2 rounded-lg bg-gray-700 text-gray-100 hover:bg-gray-600 transition-colors mb-2 border-none shadow-none"
+                            className="w-full flex items-center justify-between p-2 rounded-lg bg-gradient-to-r from-yellow-300 to-orange-200 text-yellow-900 font-bold hover:from-yellow-400 hover:to-orange-300 transition-colors mb-2 border-2 border-yellow-500 shadow-none"
                             style={{boxShadow: 'none'}}
                           >
-                            <span className="font-medium text-sm tracking-wide">{subsection.title}</span>
-                            {isSubsectionExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            <span className="font-bold text-base tracking-wide drop-shadow-sm">{subsection.title}</span>
+                            {isSubsectionExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                           </button>
 
                           {/* Chords Grid */}
@@ -287,17 +286,17 @@ const ChordMindMap = () => {
                                 .map((chord, index) => (
                                   <button
                                     key={index}
-                                    onClick={() => handleChordClick(chord, categoryKey)}
-                                    className={`p-3 rounded-xl border transition-all duration-200 hover:bg-cyan-900/30 hover:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-base font-mono ${
-                                      chord.comune 
-                                        ? 'border-yellow-400 text-yellow-100 bg-cyan-900/10 font-semibold' 
-                                        : 'border-gray-600 text-gray-200 bg-gray-900/10'
-                                    } ${selectedChord?.sigla === chord.sigla ? 'ring-2 ring-cyan-400' : ''}`}
-                                    style={{boxShadow: 'none'}}
+                                    onClick={e => handleChordClick(chord, categoryKey, e)}
+                                    className={`p-4 rounded-2xl border-2 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-base font-mono shadow-md group 
+                                      ${chord.comune
+                                        ? 'border-orange-400 bg-yellow-100 text-yellow-900 font-extrabold hover:bg-yellow-200 hover:shadow-lg'
+                                        : 'border-cyan-300 bg-white text-cyan-900 font-semibold hover:bg-gray-100 hover:shadow-lg'}
+                                      ${selectedChord?.sigla === chord.sigla ? 'ring-2 ring-cyan-400' : ''}`}
+                                    style={{boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)'}}
                                   >
                                     <div className="text-center">
-                                      <div className="font-mono text-base mb-1 tracking-wide">{chord.sigla}</div>
-                                      <div className="text-xs opacity-80 leading-tight font-sans">{chord.nome}</div>
+                                      <div className={`font-mono text-lg mb-1 tracking-wide ${chord.comune ? 'text-yellow-900 font-extrabold drop-shadow-sm' : 'text-cyan-900 font-bold drop-shadow-sm'} group-hover:scale-105 transition-transform`}>{chord.sigla}</div>
+                                      <div className={`text-xs leading-tight font-sans ${chord.comune ? 'text-orange-700 font-bold' : 'text-cyan-700 font-semibold'} group-hover:underline transition-all`}>{chord.nome}</div>
                                     </div>
                                   </button>
                                 ))}
@@ -318,18 +317,22 @@ const ChordMindMap = () => {
             {/* Overlay */}
             <div
               className="fixed inset-0 bg-black bg-opacity-60 z-40 animate-fadein"
-              onClick={() => setSelectedChord(null)}
+              onClick={() => { setSelectedChord(null); setPopupPosition(null); }}
             ></div>
-            {/* Modal Popup */}
-            <div className="fixed inset-0 z-50 flex items-center justify-center px-2 py-8">
+            {/* Modal Popup posizionato */}
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center px-2"
+              style={{ pointerEvents: 'none' }}
+              >
               <div
-                className="w-full max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl bg-gray-900 rounded-2xl p-4 sm:p-6 md:p-7 shadow-lg max-h-[80vh] overflow-y-auto relative"
+                className="w-[90vw] min-w-[320px] max-w-6xl md:max-w-2xl md:w-2/5 bg-gray-100 rounded-2xl p-2 sm:p-4 md:p-5 shadow-lg h-fit max-h-[85vh] overflow-y-auto relative"
+                style={{ pointerEvents: 'auto' }}
                 onClick={e => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-cyan-300 tracking-wide">Dettagli accordo</h3>
+                  <h3 className="text-lg font-semibold text-cyan-700 tracking-wide">Dettagli accordo</h3>
                   <button
-                    onClick={() => setSelectedChord(null)}
+                    onClick={() => { setSelectedChord(null); setPopupPosition(null); }}
                     className="text-gray-400 hover:text-cyan-200 transition-colors"
                     aria-label="Chiudi dettagli"
                   >
@@ -338,39 +341,36 @@ const ChordMindMap = () => {
                 </div>
                 <div className="space-y-4">
                   <div className="text-center mb-2">
-                    <div className="text-2xl font-mono font-bold text-cyan-100 mb-1 tracking-wide">
+                    <div className="text-2xl font-mono font-bold text-cyan-700 mb-1 tracking-wide">
                       {selectedChord.sigla}
                     </div>
                     <div className="text-base text-gray-300 mb-1">
-                      {selectedChord.nome}
+                      <span className="text-gray-700">{selectedChord.nome}</span>
                     </div>
                     {selectedChord.comune && (
-                      <div className="inline-block bg-yellow-400 text-gray-900 px-2 py-1 rounded text-xs font-bold mt-1">
+                      <div className="inline-block bg-yellow-300 text-gray-900 px-2 py-1 rounded text-xs font-bold mt-1 border border-yellow-400">
                         comune
                       </div>
                     )}
                   </div>
                   <div className="border-t border-cyan-900 pt-4">
                     <div className="mb-2">
-                      <h4 className="font-semibold text-cyan-400 mb-1 text-xs uppercase tracking-wide">Formula</h4>
-                      <div className="font-mono text-base bg-gray-800 p-2 rounded-lg text-cyan-100">
+                      <h4 className="font-semibold text-cyan-700 mb-1 text-xs uppercase tracking-wide">Formula</h4>
+                      <div className="font-mono text-base bg-gray-200 p-2 rounded-lg text-cyan-900 border border-cyan-200">
                         {selectedChord.formula}
                       </div>
                     </div>
                     <div className="mb-2">
-                      <h4 className="font-semibold text-cyan-400 mb-1 text-xs uppercase tracking-wide">Note (in Do)</h4>
-                      <div className="font-mono text-base bg-gray-800 p-2 rounded-lg text-cyan-100">
+                      <h4 className="font-semibold text-cyan-700 mb-1 text-xs uppercase tracking-wide">Note (in Do)</h4>
+                      <div className="font-mono text-base bg-gray-200 p-2 rounded-lg text-cyan-900 border border-cyan-200">
                         {selectedChord.note}
                       </div>
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-cyan-400 mb-1 text-xs uppercase tracking-wide">Categoria</h4>
-                      <div className="text-xs bg-gray-800 p-2 rounded-lg capitalize text-cyan-100">
-                        {chordData[selectedChord.category]?.title}
-                      </div>
-                    </div>
                   </div>
-                  {/* ...nessun messaggio aggiuntivo... */}
+                  {/* Messaggio di chiusura */}
+                  <div className="text-center text-xs text-cyan-700 opacity-80 border-t border-cyan-200 mt-2 pt-2">
+                    Per chiudere premi la <span className="font-bold">X</span> in alto a destra
+                  </div>
                 </div>
               </div>
             </div>
