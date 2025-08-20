@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import './App.css';
 
@@ -13,6 +13,8 @@ const ChordMindMap = () => {
   const [expandedSubsections, setExpandedSubsections] = useState({});
   const [viewMode, setViewMode] = useState('accordi_comuni'); // 'accordi_comuni', 'accordi_avanzati', 'mappa_generale'
   const [selectedRoot, setSelectedRoot] = useState('Do'); // Do, Mi e Sol per iniziare
+  const [csvData, setCsvData] = useState(null); // Dati del CSV caricati
+  const [csvLoading, setCsvLoading] = useState(true);
 
   const [expandedMappa, setExpandedMappa] = useState({
     triadi: true,
@@ -39,50 +41,186 @@ const ChordMindMap = () => {
     setExpandedMappa(prev => ({ ...prev, [cat]: !prev[cat] }));
   };
 
+  // Carica e parsa il CSV all'avvio
+  useEffect(() => {
+    const loadCSV = async () => {
+      try {
+        setCsvLoading(true);
+        const response = await fetch('/accordi_database.csv');
+        if (!response.ok) throw new Error('CSV non trovato');
+        
+        const csvText = await response.text();
+        const lines = csvText.split('\n');
+        
+        // Parsa il CSV in una struttura utilizzabile
+        // Il CSV ha una struttura speciale: riga 2 continua nella riga 3
+        const headers1 = lines[1].split(','); // Riga 2: primi accordi
+        const headers2 = lines[2].split(','); // Riga 3: continua gli accordi
+        
+        // La riga 2 termina con "m add 9 e la riga 3 inizia con ",9,m9...
+        // Quindi dobbiamo unire le due righe correttamente
+        const allHeaders = [...headers1]; // Inizia con la riga 2
+        
+        // La riga 3 inizia con una virgola vuota, quindi salta il primo elemento
+        for (let i = 1; i < headers2.length; i++) {
+          const header = headers2[i]?.trim();
+          if (header) {
+            allHeaders.push(header);
+          }
+        }
+        
+        const csvDataMap = {};
+        
+        // Per ogni riga (tonalità), crea un mapping accordo → note
+        for (let i = 6; i < lines.length && lines[i].trim(); i++) { // Inizia dalla riga 7 (indice 6)
+          const values = lines[i].split(',');
+          const tonalita = values[0]; // Prima colonna = tonalità
+          
+          if (tonalita && tonalita.trim()) {
+            csvDataMap[tonalita] = {};
+            
+            // Le prime colonne corrispondono alla riga 2 degli header
+            for (let j = 1; j < headers1.length && j < values.length; j++) {
+              const accordoType = headers1[j]?.trim();
+              const note = values[j]?.trim();
+              
+              if (accordoType && note && note !== 'no') {
+                csvDataMap[tonalita][accordoType] = note;
+              }
+            }
+            
+            // Se ci sono altre colonne, potrebbero essere dalla riga 3
+            // Ma nel CSV che vedo, sembra che ogni riga abbia tutti i valori sulla stessa riga
+            // Quindi continuo con gli header della riga 3
+            let headerIndex = headers1.length;
+            for (let j = 1; j < headers2.length; j++) { // Salta il primo elemento vuoto della riga 3
+              const accordoType = headers2[j]?.trim();
+              if (accordoType && headerIndex < values.length) {
+                const note = values[headerIndex]?.trim();
+                if (note && note !== 'no') {
+                  csvDataMap[tonalita][accordoType] = note;
+                }
+                headerIndex++;
+              }
+            }
+          }
+        }
+        
+        setCsvData(csvDataMap);
+        console.log('✅ CSV caricato con successo:', Object.keys(csvDataMap));
+        console.log('🔍 Headers CSV (combinati):', allHeaders);
+        console.log('🔍 Esempio Do:', csvDataMap['Do']);
+        console.log('🔍 Totale headers trovati:', allHeaders.length);
+        console.log('🔍 Headers CSV riga 2:', headers1);
+        console.log('🔍 Headers CSV riga 3:', headers2);
+        
+      } catch (error) {
+        console.error('❌ Errore caricamento CSV:', error);
+        setCsvData(null);
+      } finally {
+        setCsvLoading(false);
+      }
+    };
+
+    loadCSV();
+  }, []);
+
   const handleChordClick = (chord, category, event) => {
     const y = event?.clientY || window.innerHeight / 2;
     setPopupPosition({ top: y });
     setSelectedChord({ ...chord, category });
   };
 
-  // SISTEMA DI TRASPOSIZIONE AUTOMATICA
+  // SISTEMA DI TRASPOSIZIONE CON CSV
   const transposeChord = (chord, targetRoot) => {
-    if (targetRoot === 'Do') {
-      return chord; // Nessuna trasposizione
-    }
-
-    // Mappa delle tonalità con i loro intervalli in semitoni da Do
-    const keyIntervals = {
-      'Do': 0, 'Re': 2, 'Mi': 4, 'Fa': 5, 'Sol': 7, 'La': 9, 'Si': 11
+    // Cambia solo la sigla da C a quella corrispondente alla tonalità target
+    const rootMap = {
+      'Do': 'C', 'Do#': 'C#', 'Reb': 'Db', 'Re': 'D', 'Re#': 'D#', 'Mib': 'Eb', 'Mi': 'E',
+      'Fa': 'F', 'Fa#': 'F#', 'Solb': 'Gb', 'Sol': 'G', 'Sol#': 'G#', 'Lab': 'Ab', 
+      'La': 'A', 'La#': 'A#', 'Sib': 'Bb', 'Si': 'B'
     };
-
-    // Mappa delle note cromatiche
-    const chromaticNotes = ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'];
-    const interval = keyIntervals[targetRoot] || 0;
-
-    // Funzione per trasporre una singola nota
-    const transposeNote = (note) => {
-      // Trova la nota base (senza alterazioni)
-      const baseNote = note.replace(/[#♯♭b]/g, '');
-      const alterations = note.slice(baseNote.length);
-      
-      const noteIndex = chromaticNotes.indexOf(baseNote);
-      if (noteIndex === -1) return note; // Se non trova la nota, la lascia invariata
-      
-      const newIndex = (noteIndex + interval) % 12;
-      return chromaticNotes[newIndex] + alterations;
-    };
-
-    // Trasponi la sigla (sostituisce solo la prima lettera o le prime due se c'è #)
-    const newSigla = chord.sigla.replace(/^C([#♯♭b]?)/, (match, alteration) => {
-      return transposeNote('Do' + alteration);
-    });
-
-    // Trasponi il nome (sostituisce "Do" con la nuova tonalità)
+    
+    const newSigla = chord.sigla.replace(/^C/, rootMap[targetRoot] || 'C');
     const newNome = chord.nome.replace(/Do/g, targetRoot);
 
-    // Trasponi le note
-    const newNote = chord.note ? chord.note.split(' ').map(transposeNote).join(' ') : chord.note;
+    // CERCA LE NOTE NEL CSV
+    let newNote = `prova a calcolarlo tu`; // Fallback
+    
+    if (csvData && csvData[targetRoot]) {
+      // Mappa COMPLETA basata su tutti gli accordi esistenti nel CSV
+      const csvTypeMap = {
+        // TRIADI (dalla intestazione CSV)
+        'C': 'Maggiore',
+        'Cm': 'm',
+        'Cdim': 'dim (°)',
+        'Caug': 'aum (+)',
+        'Csus2': 'sus 2',
+        'Csus4': 'sus 4',
+        
+        // QUADRIADI (dalla intestazione CSV)
+        'C6': '6',
+        'Cm6': 'm6',
+        'C7': '7 (di dominante)',
+        'Cmaj7': 'maj7',
+        'Cm7': 'm7',
+        'Cm7♭5': 'm7b5 (semidim)',
+        'Cdim7': '7dim',
+        
+        // ACCORDI AGGIUNTI (dalla intestazione CSV)
+        'Cadd2': 'add 2',
+        'Cadd4': 'add 4',
+        'Cadd9': 'add 9',
+        
+        // ACCORDI ESTESI (che esistono nel nostro sistema)
+        'C7♯5': '7 ♯5',            // Do settima quinta aumentata
+        'C7♭5': '7 ♭5',            // Do settima quinta diminuita
+        
+        // ACCORDI ESTESI - RIGA 3 (dalla intestazione CSV)
+        'C9': '9',
+        'Cm9': 'm9',
+        'Cmaj9': 'maj 9',
+        'C11': '11',
+        'Cm11': 'm 11',
+        'C13': '13',
+        'Cm13': 'm 13',
+        // ACCORDI CHE NON ESISTONO nel CSV (usano formula)
+        'Cmaj11': null,   // ❌ Non nel CSV
+        'Cmaj13': null,   // ❌ Non nel CSV  
+        'C7♯9': null,     // ❌ Non nel CSV
+        'C7♭9': null,     // ❌ Non nel CSV
+        'C7♯11': null,    // ❌ Non nel CSV
+        'C7♭13': null     // ❌ Non nel CSV
+      };
+
+      const csvType = csvTypeMap[chord.sigla];
+      if (csvType && csvData[targetRoot]) {
+        // Prova prima il mapping esatto
+        if (csvData[targetRoot][csvType]) {
+          newNote = csvData[targetRoot][csvType];
+          console.log(`✅ Trovato nel CSV: ${chord.sigla} -> ${targetRoot} -> ${csvType} = ${newNote}`);
+        } else {
+          // Prova varianti con spazi
+          const csvTypeWithSpace = csvType + ' ';
+          const csvTypeTrimmed = csvType.trim();
+          
+          if (csvData[targetRoot][csvTypeWithSpace]) {
+            newNote = csvData[targetRoot][csvTypeWithSpace];
+            console.log(`✅ Trovato nel CSV (con spazio): ${chord.sigla} -> ${targetRoot} -> "${csvTypeWithSpace}" = ${newNote}`);
+          } else if (csvData[targetRoot][csvTypeTrimmed]) {
+            newNote = csvData[targetRoot][csvTypeTrimmed];
+            console.log(`✅ Trovato nel CSV (trimmed): ${chord.sigla} -> ${targetRoot} -> "${csvTypeTrimmed}" = ${newNote}`);
+          } else {
+            console.log(`❌ Non trovato nel CSV: ${chord.sigla} -> ${targetRoot} -> "${csvType}"`);
+            console.log(`   Chiavi disponibili:`, Object.keys(csvData[targetRoot]));
+          }
+        }
+      } else if (csvType === null) {
+        // Accordo non mappato nel CSV, usa la formula
+        newNote = `prova a calcolarlo tu`;
+      } else {
+        console.log(`❌ Non trovato nel CSV: ${chord.sigla} -> ${targetRoot} -> ${csvType}`);
+      }
+    }
 
     return {
       ...chord,
@@ -131,7 +269,9 @@ const ChordMindMap = () => {
           chords: [
             { sigla: 'C7', nome: 'Do settima di dominante', formula: '1 - 3 - 5 - ♭7', note: 'Do Mi Sol Si♭', comune: true },
             { sigla: 'Cmaj7', nome: 'Do settima maggiore', formula: '1 - 3 - 5 - 7', note: 'Do Mi Sol Si', comune: true },
-            { sigla: 'Cm7', nome: 'Do minore settima', formula: '1 - ♭3 - 5 - ♭7', note: 'Do Mi♭ Sol Si♭', comune: true }
+            { sigla: 'Cm7', nome: 'Do minore settima', formula: '1 - ♭3 - 5 - ♭7', note: 'Do Mi♭ Sol Si♭', comune: true },
+            { sigla: 'Cm7♭5', nome: 'Do semidiminuito', formula: '1 - ♭3 - ♭5 - ♭7', note: 'Do Mi♭ Sol♭ Si♭', comune: false },
+            { sigla: 'Cdim7', nome: 'Do diminuito settima', formula: '1 - ♭3 - ♭5 - ♭♭7', note: 'Do Mi♭ Sol♭ La', comune: false }
           ]
         },
         sesta: {
@@ -139,6 +279,49 @@ const ChordMindMap = () => {
           chords: [
             { sigla: 'C6', nome: 'Do sesta', formula: '1 - 3 - 5 - 6', note: 'Do Mi Sol La', comune: true },
             { sigla: 'Cm6', nome: 'Do minore sesta', formula: '1 - ♭3 - 5 - 6', note: 'Do Mi♭ Sol La', comune: false }
+          ]
+        },
+        add: {
+          title: "Accordi Add",
+          chords: [
+            { sigla: 'Cadd9', nome: 'Do add nona', formula: '1 - 3 - 5 - 9', note: 'Do Mi Sol Re', comune: true },
+            { sigla: 'Cadd2', nome: 'Do add seconda', formula: '1 - 2 - 3 - 5', note: 'Do Re Mi Sol', comune: false },
+            { sigla: 'Cadd4', nome: 'Do add quarta', formula: '1 - 3 - 4 - 5', note: 'Do Mi Fa Sol', comune: false }
+          ]
+        }
+      }
+    },
+    estesi: {
+      title: "ACCORDI ESTESI (5+ Note)",
+      color: "bg-purple-700",
+      textColor: "text-purple-100",
+      subsections: {
+        noni: {
+          title: "Accordi di Nona",
+          chords: [
+            { sigla: 'C9', nome: 'Do nona di dominante', formula: '1 - 3 - 5 - ♭7 - 9', note: 'Do Mi Sol Si♭ Re', comune: false },
+            { sigla: 'Cmaj9', nome: 'Do nona maggiore', formula: '1 - 3 - 5 - 7 - 9', note: 'Do Mi Sol Si Re', comune: false },
+            { sigla: 'Cm9', nome: 'Do minore nona', formula: '1 - ♭3 - 5 - ♭7 - 9', note: 'Do Mi♭ Sol Si♭ Re', comune: false },
+            { sigla: 'C7♯9', nome: 'Do settima nona aumentata', formula: '1 - 3 - 5 - ♭7 - ♯9', note: 'Do Mi Sol Si♭ Re♯', comune: false },
+            { sigla: 'C7♭9', nome: 'Do settima nona diminuita', formula: '1 - 3 - 5 - ♭7 - ♭9', note: 'Do Mi Sol Si♭ Re♭', comune: false }
+          ]
+        },
+        undicesimi: {
+          title: "Accordi di Undicesima",
+          chords: [
+            { sigla: 'C11', nome: 'Do undicesima', formula: '1 - 3 - 5 - ♭7 - 9 - 11', note: 'Do Mi Sol Si♭ Re Fa', comune: false },
+            { sigla: 'Cmaj11', nome: 'Do undicesima maggiore', formula: '1 - 3 - 5 - 7 - 9 - 11', note: 'Do Mi Sol Si Re Fa', comune: false },
+            { sigla: 'Cm11', nome: 'Do minore undicesima', formula: '1 - ♭3 - 5 - ♭7 - 9 - 11', note: 'Do Mi♭ Sol Si♭ Re Fa', comune: false },
+            { sigla: 'C7♯11', nome: 'Do settima undicesima aumentata', formula: '1 - 3 - 5 - ♭7 - 9 - ♯11', note: 'Do Mi Sol Si♭ Re Fa♯', comune: false }
+          ]
+        },
+        tredicesimi: {
+          title: "Accordi di Tredicesima",
+          chords: [
+            { sigla: 'C13', nome: 'Do tredicesima', formula: '1 - 3 - 5 - ♭7 - 9 - 11 - 13', note: 'Do Mi Sol Si♭ Re Fa La', comune: false },
+            { sigla: 'Cmaj13', nome: 'Do tredicesima maggiore', formula: '1 - 3 - 5 - 7 - 9 - 11 - 13', note: 'Do Mi Sol Si Re Fa La', comune: false },
+            { sigla: 'Cm13', nome: 'Do minore tredicesima', formula: '1 - ♭3 - 5 - ♭7 - 9 - 11 - 13', note: 'Do Mi♭ Sol Si♭ Re Fa La', comune: false },
+            { sigla: 'C7♭13', nome: 'Do settima tredicesima diminuita', formula: '1 - 3 - 5 - ♭7 - 9 - ♭13', note: 'Do Mi Sol Si♭ Re La♭', comune: false }
           ]
         }
       }
@@ -182,11 +365,21 @@ const ChordMindMap = () => {
                   className="bg-gray-600 text-white px-4 py-2 rounded-lg text-base font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400"
                 >
                   <option value="Do">Do (C)</option>
+                  <option value="Do#">Do# (C#)</option>
+                  <option value="Reb">Re♭ (D♭)</option>
                   <option value="Re">Re (D)</option>
+                  <option value="Re#">Re# (D#)</option>
+                  <option value="Mib">Mi♭ (E♭)</option>
                   <option value="Mi">Mi (E)</option>
                   <option value="Fa">Fa (F)</option>
+                  <option value="Fa#">Fa# (F#)</option>
+                  <option value="Solb">Sol♭ (G♭)</option>
                   <option value="Sol">Sol (G)</option>
+                  <option value="Sol#">Sol# (G#)</option>
+                  <option value="Lab">La♭ (A♭)</option>
                   <option value="La">La (A)</option>
+                  <option value="La#">La# (A#)</option>
+                  <option value="Sib">Si♭ (B♭)</option>
                   <option value="Si">Si (B)</option>
                 </select>
               </div>
