@@ -1,6 +1,90 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Music, Volume2, X, ChevronDown, ChevronRight } from 'lucide-react';
 
+// Parser CSV per caricare dinamicamente tutti gli accordi
+const parseCSVChordData = (csvText) => {
+  const lines = csvText.trim().split('\n');
+  const headers = lines[2].split(','); // Riga con le sigle degli accordi
+  const formulas = lines[4].split(','); // Riga con le formule
+  
+  // Mapping delle tonalità con i loro nomi
+  const tonalita = {
+    'Do': 7, 'Do#': 8, 'Reb': 9, 'Re': 10, 'Re#': 11, 'Mib': 12,
+    'Mi': 13, 'Fa': 14, 'Fa#': 15, 'Solb': 16, 'Sol': 17, 'Sol#': 18,
+    'Lab': 19, 'La': 20, 'La#': 21, 'Sib': 22, 'Si': 23
+  };
+
+  const chordMappings = {};
+
+  // Per ogni tonalità, crea il mapping completo
+  Object.entries(tonalita).forEach(([nome, riga]) => {
+    const noteRow = lines[riga-1]; // Le righe del CSV sono 0-indexed
+    if (!noteRow) return;
+    
+    const notes = noteRow.split(',');
+    const mapping = {};
+
+    headers.forEach((header, index) => {
+      if (index === 0 || !header.trim()) return; // Salta la prima colonna (fondamentale)
+      
+      const nota = notes[index];
+      if (!nota || nota.trim() === 'no' || nota.trim() === '') return;
+
+      // Crea il mapping da C* a tonalità*
+      const originalChord = header.trim();
+      const newSigla = originalChord.replace(/^C/, nome);
+      const formula = formulas[index] || '';
+      
+      mapping[originalChord] = {
+        sigla: newSigla,
+        nome: `${nome} ${getChordName(originalChord)}`,
+        formula: formula.trim(),
+        note: nota.trim(),
+        comune: isCommonChord(originalChord)
+      };
+    });
+
+    chordMappings[nome] = mapping;
+  });
+
+  return chordMappings;
+};
+
+// Helper functions
+const getChordName = (chord) => {
+  const names = {
+    'C': 'maggiore', 'Cm': 'minore', 'Cdim': 'diminuito', 'Caug': 'aumentato',
+    'Csus2': 'seconda sospesa', 'Csus4': 'quarta sospesa', 'C6': 'sesta',
+    'Cm6': 'minore sesta', 'C7': 'settima di dominante', 'Cmaj7': 'settima maggiore',
+    'Cm7': 'minore settima', 'Cm7♭5': 'semidiminuito', 'Cm(maj7)': 'minore settima maggiore',
+    'Cmaj7♯5': 'settima maggiore quinta aumentata', 'C7♯5': 'settima con quinta aumentata',
+    'C7♭5': 'settima con quinta diminuita', 'Cmaj7♭5': 'settima maggiore con quinta diminuita',
+    'Cdim(maj7)': 'diminuito settima maggiore', 'C7sus4': 'settima con quarta sospesa',
+    'Cadd2': 'maggiore add2', 'Cmadd2': 'minore add2', 'Cadd4': 'maggiore add4',
+    'Cmadd4': 'minore add4', 'Cadd9': 'maggiore con nona', 'Cmadd9': 'minore con nona',
+    'C9': 'nona di dominante', 'Cm9': 'minore nona', 'Cmaj9': 'nona maggiore',
+    'C11': 'undicesima', 'Cm11': 'undicesima minore', 'C13': 'tredicesima',
+    'Cmaj13': 'tredicesima maggiore', 'Cm13': 'tredicesima minore', 'C13sus4': 'tredicesima sospesa',
+    'C7♭9': 'settima con nona diminuita', 'C7♯9': 'settima con nona aumentata',
+    'C7♭9♯5': 'settima con nona dim. e quinta aum.', 'C7♭13': 'settima con tredicesima diminuita'
+  };
+  return names[chord] || chord.replace('C', '').toLowerCase();
+};
+
+const isCommonChord = (chord) => {
+  const common = ['C', 'Cm', 'C6', 'C7', 'Cmaj7', 'Cm7', 'Cadd2', 'Cadd9', 'Cmadd9', 'C9'];
+  return common.includes(chord);
+};
+
+const getEnglishNote = (italianNote) => {
+  const mapping = {
+    'Do': 'C', 'Do#': 'C#', 'Reb': 'Db', 'Re': 'D', 'Re#': 'D#', 'Mib': 'Eb',
+    'Mi': 'E', 'Fa': 'F', 'Fa#': 'F#', 'Solb': 'Gb', 'Sol': 'G', 'Sol#': 'G#',
+    'Lab': 'Ab', 'La': 'A', 'La#': 'A#', 'Sib': 'Bb', 'Si': 'B'
+  };
+  return mapping[italianNote] || italianNote;
+};
+
 const ChordMindMap = () => {
   // Modalità: miniaiutara o altro
   const [modalita] = useState('miniaiutara');
@@ -12,8 +96,10 @@ const ChordMindMap = () => {
     estesi: false
   });
   const [expandedSubsections, setExpandedSubsections] = useState({});
-  const [showOnlyComuni, setShowOnlyComuni] = useState(false);
-  const [showMappaGenerale, setShowMappaGenerale] = useState(false);
+  const [viewMode, setViewMode] = useState('accordi_comuni'); // 'accordi_comuni', 'accordi_avanzati', 'mappa_generale'
+  const [selectedRoot, setSelectedRoot] = useState('Do'); // Fondamentale selezionata
+  const [csvMappings, setCsvMappings] = useState({}); // Mappings caricati dal CSV
+  const [csvLoading, setCsvLoading] = useState(true); // Stato di caricamento CSV
   const [expandedMappa, setExpandedMappa] = useState({
     triadi: true,
     quadriadi: false,
@@ -22,6 +108,143 @@ const ChordMindMap = () => {
 
   const toggleMappaCategory = (cat) => {
     setExpandedMappa(prev => ({ ...prev, [cat]: !prev[cat] }));
+  };
+
+  // Carica il CSV all'avvio
+  useEffect(() => {
+    const loadCSV = async () => {
+      try {
+        setCsvLoading(true);
+        const response = await fetch('/accordi_database.csv');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const csvText = await response.text();
+        const mappings = parseCSVChordData(csvText);
+        
+        if (Object.keys(mappings).length === 0) {
+          throw new Error('Nessuna tonalità trovata nel CSV');
+        }
+        
+        setCsvMappings(mappings);
+        console.log('✅ CSV caricato con successo:', Object.keys(mappings).length, 'tonalità');
+      } catch (error) {
+        console.error('❌ Errore nel caricamento del CSV:', error.message);
+        console.log('🔄 Modalità fallback attiva: solo accordi hardcoded disponibili');
+        // Fallback: mapping vuoto (userà il fallback dell'UI)
+        setCsvMappings({});
+      } finally {
+        setCsvLoading(false);
+      }
+    };
+
+    loadCSV();
+  }, []);
+
+  // Mappatura completa degli accordi per Mi basata sul CSV
+  const getEChordMapping = () => ({
+    // TRIADI (colonne 2-7)
+    'C': { sigla: 'E', nome: 'Mi maggiore', formula: '1 - 3 - 5', note: 'Mi Sol# Si', comune: true },
+    'Cm': { sigla: 'Em', nome: 'Mi minore', formula: '1 - ♭3 - 5', note: 'Mi Sol Si', comune: true },
+    'Cdim': { sigla: 'Edim', nome: 'Mi diminuito', formula: '1 - ♭3 - ♭5', note: 'Mi Sol Sib', comune: false },
+    'Caug': { sigla: 'Eaug', nome: 'Mi aumentato', formula: '1 - 3 - ♯5', note: 'Mi Sol# Do', comune: false },
+    'Csus2': { sigla: 'Esus2', nome: 'Mi seconda sospesa', formula: '1 - 2 - 5', note: 'Mi Fa# Si', comune: false },
+    'Csus4': { sigla: 'Esus4', nome: 'Mi quarta sospesa', formula: '1 - 4 - 5', note: 'Mi La Si', comune: false },
+    
+    // QUADRIADI (colonne 8-21)
+    'C6': { sigla: 'E6', nome: 'Mi sesta', formula: '1 - 3 - 5 - 6', note: 'Mi Sol# Si Do#', comune: true },
+    'Cm6': { sigla: 'Em6', nome: 'Mi minore sesta', formula: '1 - ♭3 - 5 - 6', note: 'Mi Sol Si Do#', comune: false },
+    'C7': { sigla: 'E7', nome: 'Mi settima di dominante', formula: '1 - 3 - 5 - ♭7', note: 'Mi Sol# Si Re', comune: true },
+    'Cmaj7': { sigla: 'Emaj7', nome: 'Mi settima maggiore', formula: '1 - 3 - 5 - 7', note: 'Mi Sol# Si Re#', comune: true },
+    'Cm7': { sigla: 'Em7', nome: 'Mi minore settima', formula: '1 - ♭3 - 5 - ♭7', note: 'Mi Sol Si Re', comune: true },
+    'Cm7♭5': { sigla: 'Em7♭5', nome: 'Mi semidiminuito', formula: '1 - ♭3 - ♭5 - ♭7', note: 'Mi Sol Sib Re', comune: false },
+    'Cm(maj7)': { sigla: 'Em(maj7)', nome: 'Mi minore settima maggiore', formula: '1 - ♭3 - 5 - 7', note: 'Mi Sol Si Re#', comune: false },
+    'Cmaj7♯5': { sigla: 'Emaj7♯5', nome: 'Mi settima maggiore quinta aumentata', formula: '1 - 3 - ♯5 - 7', note: 'Mi Sol# Si# Re#', comune: false },
+    'C7♯5': { sigla: 'E7♯5', nome: 'Mi settima con quinta aumentata', formula: '1 - 3 - ♯5 - ♭7', note: 'Mi Sol# Si# Re', comune: false },
+    'C7♭5': { sigla: 'E7♭5', nome: 'Mi settima con quinta diminuita', formula: '1 - 3 - ♭5 - ♭7', note: 'Mi Sol# Sib Re', comune: false },
+    'Cmaj7♭5': { sigla: 'Emaj7♭5', nome: 'Mi settima maggiore con quinta diminuita', formula: '1 - 3 - ♭5 - 7', note: 'Mi Sol# Sib Re#', comune: false },
+    'Cdim(maj7)': { sigla: 'Edim(maj7)', nome: 'Mi diminuito settima maggiore', formula: '1 - ♭3 - ♭5 - 7', note: 'Mi Sol Sib Re#', comune: false },
+    'C7sus4': { sigla: 'E7sus4', nome: 'Mi settima con quarta sospesa', formula: '1 - 4 - 5 - ♭7', note: 'Mi La Si Re', comune: false },
+    
+    // ADD CHORDS (colonne 22-27)
+    'Cadd2': { sigla: 'Eadd2', nome: 'Mi maggiore add2', formula: '1 - 2 - 3 - 5', note: 'Mi Fa# Sol# Si', comune: true },
+    'Cmadd2': { sigla: 'Emadd2', nome: 'Mi minore add2', formula: '1 - 2 - ♭3 - 5', note: 'Mi Fa# Sol Si', comune: false },
+    'Cadd4': { sigla: 'Eadd4', nome: 'Mi maggiore add4', formula: '1 - 3 - 4 - 5', note: 'Mi Sol# La Si', comune: false },
+    'Cmadd4': { sigla: 'Emadd4', nome: 'Mi minore add4', formula: '1 - ♭3 - 4 - 5', note: 'Mi Sol La Si', comune: false },
+    'Cadd9': { sigla: 'Eadd9', nome: 'Mi maggiore con nona', formula: '1 - 3 - 5 - 9', note: 'Mi Sol# Si Fa#', comune: true },
+    'Cmadd9': { sigla: 'Emadd9', nome: 'Mi minore con nona', formula: '1 - ♭3 - 5 - 9', note: 'Mi Sol Si Fa#', comune: true },
+    
+    // ACCORDI ESTESI (colonne 28-35)
+    'C9': { sigla: 'E9', nome: 'Mi nona di dominante', formula: '1 - 3 - 5 - ♭7 - 9', note: 'Mi Sol# Si Re Fa#', comune: true },
+    'Cm9': { sigla: 'Em9', nome: 'Mi minore nona', formula: '1 - ♭3 - 5 - ♭7 - 9', note: 'Mi Sol Si Re Fa#', comune: false },
+    'Cmaj9': { sigla: 'Emaj9', nome: 'Mi nona maggiore', formula: '1 - 3 - 5 - 7 - 9', note: 'Mi Sol# Si Re# Fa#', comune: false },
+    'C11': { sigla: 'E11', nome: 'Mi undicesima', formula: '1 - 3 - 5 - ♭7 - 9 - 11', note: 'Mi Sol# Si Re Fa# La', comune: false },
+    'Cm11': { sigla: 'Em11', nome: 'Mi undicesima minore', formula: '1 - ♭3 - 5 - ♭7 - 9 - 11', note: 'Mi Sol Si Re Fa# Do#', comune: false },
+    'C13': { sigla: 'E13', nome: 'Mi tredicesima', formula: '1 - 3 - 5 - ♭7 - 9 - 13', note: 'Mi Sol# Si Re Fa# Do#', comune: false },
+    'Cmaj13': { sigla: 'Emaj13', nome: 'Mi tredicesima maggiore', formula: '1 - 3 - 5 - 7 - 9 - 13', note: 'Mi Sol# Si Re# Fa# Do#', comune: false },
+    'Cm13': { sigla: 'Em13', nome: 'Mi tredicesima minore', formula: '1 - ♭3 - 5 - ♭7 - 9 - 13', note: 'Mi Sol# Si Re# Fa# Do#', comune: false },
+    'C13sus4': { sigla: 'E13sus4', nome: 'Mi tredicesima sospesa', formula: '1 - 4 - 5 - ♭7 - 9 - 13', note: 'Mi La Si Re Fa# Do#', comune: false },
+    
+    // ACCORDI ALTERATI (non nel CSV base, ma seguono la logica di trasposizione)
+    'C7♭9': { sigla: 'E7♭9', nome: 'Mi settima con nona diminuita', formula: '1 - 3 - 5 - ♭7 - ♭9', note: 'Mi Sol# Si Re Fa', comune: false },
+    'C7♯9': { sigla: 'E7♯9', nome: 'Mi settima con nona aumentata', formula: '1 - 3 - 5 - ♭7 - ♯9', note: 'Mi Sol# Si Re Fa##', comune: false },
+    'C7♭9♯5': { sigla: 'E7♭9♯5', nome: 'Mi settima con nona dim. e quinta aum.', formula: '1 - 3 - ♯5 - ♭7 - ♭9', note: 'Mi Sol# Si# Re Fa', comune: false },
+    'C7♭13': { sigla: 'E7♭13', nome: 'Mi settima con tredicesima diminuita', formula: '1 - 3 - 5 - ♭7 - ♭13', note: 'Mi Sol# Si Re Do', comune: false }
+  });
+
+  // Mappatura di base per trasposizione semplice (senza CSV)
+  const getBasicTransposition = (tonalita) => {
+    const intervalli = {
+      'Do': 0, 'Re': 2, 'Mi': 4, 'Fa': 5, 'Sol': 7, 'La': 9, 'Si': 11
+    };
+    
+    const noteCircle = ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si'];
+    const intervallo = intervalli[tonalita] || 0;
+    
+    const transposeNote = (notaOriginale) => {
+      const baseNote = notaOriginale.replace(/[#b♯♭]/g, '');
+      const accidentali = notaOriginale.slice(baseNote.length);
+      const originalIndex = noteCircle.indexOf(baseNote);
+      if (originalIndex === -1) return notaOriginale;
+      const newIndex = (originalIndex + intervallo) % 12;
+      return noteCircle[newIndex] + accidentali;
+    };
+
+    return (chord) => ({
+      ...chord,
+      sigla: transposeNote(chord.sigla),
+      nome: chord.nome.replace(/Do\s/g, `${tonalita} `).replace(/^Do([^a-zA-Z])/g, `${tonalita}$1`),
+      note: chord.note ? chord.note.split(' ').map(transposeNote).join(' ') : chord.note
+    });
+  };
+
+  // Funzione per ottenere accordi specifici basati sulla tonalità selezionata
+  const getTonalidyChords = (originalChords) => {
+    if (selectedRoot === 'Do' || csvLoading) {
+      return originalChords; // Mostra accordi originali per Do o durante il caricamento
+    }
+
+    // Usa i mapping del CSV se disponibili
+    const mapping = csvMappings[selectedRoot];
+    if (mapping) {
+      return originalChords.map(chord => {
+        return mapping[chord.sigla] || chord;
+      });
+    }
+
+    // Fallback al mapping hardcoded per Mi se il CSV non è disponibile
+    if (selectedRoot === 'Mi') {
+      const eMapping = getEChordMapping();
+      return originalChords.map(chord => {
+        return eMapping[chord.sigla] || chord;
+      });
+    }
+
+    // Fallback di base per altre tonalità usando trasposizione semplice
+    const transposeChord = getBasicTransposition(selectedRoot);
+    return originalChords.map(transposeChord);
   };
 
   const chordData = {
@@ -162,6 +385,36 @@ const ChordMindMap = () => {
     setSelectedChord({ ...chord, category });
   };
 
+  // Funzione per ottenere l'accordo originale da quello attualmente selezionato
+  const getOriginalChord = (transposedChord) => {
+    if (!transposedChord) return null;
+    
+    // Se siamo in Do, l'accordo è già quello originale
+    if (selectedRoot === 'Do' || csvLoading) {
+      return transposedChord;
+    }
+
+    // Altrimenti, dobbiamo trovare l'accordo originale dalle strutture di chordData
+    // Cerchiamo in tutti i chord arrays
+    const allChords = [
+      ...chordData.triadi.subsections.none.chords,
+      ...chordData.quadriadi.subsections.none.chords,
+      ...chordData.estesi.subsections.none.chords,
+      ...chordData.estesi.subsections.alterati.chords
+    ];
+
+    // Trasformiamo ogni accordo originale e vediamo se corrisponde a quello selezionato
+    for (const originalChord of allChords) {
+      const transformed = getTonalidyChords([originalChord])[0];
+      if (transformed.sigla === transposedChord.sigla) {
+        return originalChord;
+      }
+    }
+
+    // Fallback: ritorna quello che abbiamo
+    return transposedChord;
+  };
+
   // Sticky come versione precedente
 
   return (
@@ -169,15 +422,12 @@ const ChordMindMap = () => {
       className="w-full max-w-7xl mx-auto p-6 min-h-screen text-white"
       style={{
         backgroundColor: '#0a1833',
-        backgroundImage: `url("data:image/svg+xml,%3Csvg width='1600' height='1000' xmlns='http://www.w3.org/2000/svg'%3E%3Cg%3E%3Ccircle cx='154' cy='987' r='0.6' fill='white' opacity='0.7'/%3E%3Ccircle cx='1202' cy='234' r='0.4' fill='white' opacity='0.5'/%3E%3Ccircle cx='1456' cy='876' r='0.5' fill='white' opacity='0.8'/%3E%3Ccircle cx='321' cy='123' r='0.3' fill='white' opacity='0.6'/%3E%3Ccircle cx='789' cy='654' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='100' cy='900' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1300' cy='200' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1500' cy='800' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='170' cy='180' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='190' cy='200' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='210' cy='220' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='230' cy='240' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='250' cy='260' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='270' cy='280' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='290' cy='300' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='310' cy='320' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='330' cy='340' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='350' cy='360' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='370' cy='380' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='390' cy='400' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='410' cy='420' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='430' cy='440' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='450' cy='460' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='470' cy='480' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='490' cy='500' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='510' cy='520' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='530' cy='540' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='550' cy='560' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='570' cy='580' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='590' cy='600' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='610' cy='620' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='630' cy='640' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='650' cy='660' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='670' cy='680' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='690' cy='700' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='710' cy='720' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='730' cy='740' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='750' cy='760' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='770' cy='780' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='790' cy='800' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='810' cy='820' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='830' cy='840' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='850' cy='860' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='870' cy='880' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='890' cy='900' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='910' cy='920' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='930' cy='940' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='950' cy='960' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='970' cy='980' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='990' cy='1000' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1010' cy='1020' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1030' cy='1040' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1050' cy='1060' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1070' cy='1080' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1090' cy='1100' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1110' cy='1120' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1130' cy='1140' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1150' cy='1160' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1170' cy='1180' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1190' cy='1200' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1210' cy='1220' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1230' cy='1240' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1250' cy='1260' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1270' cy='1280' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1290' cy='1300' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1310' cy='1320' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1330' cy='1340' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1350' cy='1360' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1370' cy='1380' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1390' cy='1400' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1410' cy='1420' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1430' cy='1440' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1450' cy='1460' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1470' cy='1480' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1490' cy='1500' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1510' cy='1520' r='0.4' fill='white' opacity='0.6'/%3E%3Ccircle cx='1530' cy='1540' r='0.7' fill='white' opacity='0.7'/%3E%3Ccircle cx='1550' cy='1560' r='0.5' fill='white' opacity='0.5'/%3E%3Ccircle cx='1570' cy='1580' r='0.6' fill='white' opacity='0.8'/%3E%3Ccircle cx='1590' cy='1600' r='0.4' fill='white' opacity='0.6'/%3E%3C/g%3E%3C/svg%3E")`,
-        backgroundRepeat: 'repeat',
-        backgroundSize: 'cover',
       }}
     >
       {/* Header */}
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent mb-2">
-          Mappa mentale accordi
+          Mappa mentale accordi {selectedRoot !== 'Do' && <span className="text-2xl text-green-400">({selectedRoot})</span>}
         </h1>
         <div className="flex flex-col items-center">
           <span
@@ -232,95 +482,179 @@ const ChordMindMap = () => {
           >
             Memorizza facilmente creando dei cassetti
           </span>
-          <label className="flex items-center gap-2 bg-gray-700 px-4 py-2 rounded-lg text-sm cursor-pointer mt-4">
-            <input
-              type="checkbox"
-              checked={showOnlyComuni}
-              onChange={e => setShowOnlyComuni(e.target.checked)}
-              className="accent-yellow-400"
-            />
-            Mostra solo accordi comuni
-          </label>
+          
+          {/* Tendine di selezione */}
+          <div className="mt-4 flex flex-col gap-3 items-center">
+            <select
+              value={viewMode}
+              onChange={(e) => setViewMode(e.target.value)}
+              className="bg-gray-700 text-white px-6 py-3 rounded-lg text-lg font-semibold cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400"
+            >
+              <option value="accordi_comuni">Accordi comuni</option>
+              <option value="accordi_avanzati">Accordi avanzati</option>
+              <option value="mappa_generale">Mappa generale</option>
+            </select>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-white text-sm font-medium">
+                Tonalità:
+                {!csvLoading && Object.keys(csvMappings).length === 0 && (
+                  <span className="text-red-400 ml-1 text-xs">
+                    (CSV non caricato - trasposizione semplificata)
+                  </span>
+                )}
+              </span>
+              <select
+                value={selectedRoot}
+                onChange={(e) => setSelectedRoot(e.target.value)}
+                className="bg-gray-600 text-white px-4 py-2 rounded-lg text-base font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400"
+                disabled={csvLoading}
+              >
+                <option value="Do">Do (C)</option>
+                {csvLoading ? (
+                  <option disabled>Caricamento CSV...</option>
+                ) : Object.keys(csvMappings).length > 0 ? (
+                  Object.keys(csvMappings).map(tonalita => (
+                    <option key={tonalita} value={tonalita}>
+                      {tonalita} ({getEnglishNote(tonalita)})
+                    </option>
+                  ))
+                ) : (
+                  // Fallback se il CSV non si carica: mostra almeno alcune tonalità principali
+                  <>
+                    <option value="Mi">Mi (E)</option>
+                    <option value="Sol">Sol (G)</option>
+                    <option value="Re">Re (D)</option>
+                    <option value="La">La (A)</option>
+                    <option value="Fa">Fa (F)</option>
+                    <option value="Si">Si (B)</option>
+                  </>
+                )}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
       {/* Main Content */}
       <div className="flex gap-10">
-        {/* Mind Map */}
-      <div className="flex-1 space-y-8 bg-yellow-50 rounded-2xl p-8 shadow-sm">
-        {Object.entries(chordData).map(([categoryKey, category]) => (
-          <div
-            key={categoryKey}
-            className="bg-transparent rounded-2xl p-0 shadow-none"
-          >
-            {/* Category Header */}
-            <button
-              onClick={() => toggleCategory(categoryKey)}
-              className={`w-full flex items-center justify-between p-4 rounded-xl font-semibold text-lg mb-6 shadow-none hover:opacity-95 transition-opacity border-none 
-                ${categoryKey === 'triadi' ? 'bg-[#0a1833] text-white' : 'bg-[#0a1833] text-white'}`}
-              style={{
-                boxShadow: 'none',
-                letterSpacing: '0.03em',
-              }}
-            >
-              <span>{category.title}</span>
-              {expandedCategories[categoryKey] ? <ChevronDown /> : <ChevronRight />}
-            </button>
-
-              {/* Subsections */}
-              {expandedCategories[categoryKey] && (
-                <div className="space-y-4">
-                  {Object.entries(category.subsections)
-                    .filter(([_, subsection]) => {
-                      if (!showOnlyComuni) return true;
-                      return subsection.chords.some(chord => chord.comune);
-                    })
-                    .map(([subsectionKey, subsection]) => {
-                      const subsectionExpandKey = `${categoryKey}-${subsectionKey}`;
-                      const isSubsectionExpanded = expandedSubsections[subsectionExpandKey];
-                      return (
-                        <div key={subsectionKey} className="bg-[#183a5a] rounded-xl p-5 mb-4 ml-3 md:ml-6 shadow-sm">
-                          {/* Subsection Header */}
-                          <button
-                            onClick={() => toggleSubsection(categoryKey, subsectionKey)}
-                            className="w-full flex items-center justify-between p-2 rounded-lg bg-yellow-50 text-yellow-900 font-bold mb-2 shadow-none"
-                            style={{boxShadow: 'none'}}
-                          >
-                            <span className="font-bold text-base tracking-wide drop-shadow-sm">{subsection.title}</span>
-                            {isSubsectionExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                          </button>
-
-                          {/* Chords Grid */}
-                          {isSubsectionExpanded && (
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                              {subsection.chords
-                                .filter(chord => !showOnlyComuni || chord.comune)
-                                .map((chord, index) => (
-                                  <button
-                                    key={index}
-                                    onClick={e => handleChordClick(chord, categoryKey, e)}
-                                    className={`p-4 rounded-2xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-base font-mono shadow-md group 
-                                      ${chord.comune
-                                        ? 'bg-yellow-100 text-yellow-900 font-extrabold hover:bg-yellow-200 hover:shadow-lg'
-                                        : 'bg-yellow-50 text-cyan-900 font-semibold hover:bg-gray-100 hover:shadow-lg'}
-                                      ${selectedChord?.sigla === chord.sigla ? 'ring-2 ring-cyan-400' : ''}`}
-                                    style={{boxShadow: '0 2px 8px 0 rgba(0,0,0,0.04)'}}
-                                  >
-                                    <div className="text-center">
-                                      <div className={`font-mono text-lg mb-1 tracking-wide ${chord.comune ? 'text-yellow-900 font-extrabold drop-shadow-sm' : 'text-cyan-900 font-bold drop-shadow-sm'} group-hover:scale-105 transition-transform`}>{chord.sigla}</div>
-                                      <div className={`text-xs leading-tight font-sans ${chord.comune ? 'text-orange-700 font-bold' : 'text-cyan-700 font-semibold'} group-hover:underline transition-all`}>{chord.nome}</div>
-                                    </div>
-                                  </button>
-                                ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
+        {/* Contenuto basato sulla selezione della tendina */}
+        {viewMode === 'mappa_generale' ? (
+          // Mappa generale
+          <div className="w-full max-w-2xl mx-auto bg-white rounded-2xl p-6 shadow-lg border border-gray-200 text-gray-800">
+            <div className="text-center text-2xl font-bold mb-4 flex items-center justify-center gap-2 text-slate-700">
+              <span role="img" aria-label="nota musicale">🎵</span> Accordi
             </div>
-          ))}
-        </div>
+            <div className="flex flex-col gap-2">
+              {Object.entries(chordData).map(([catKey, cat]) => (
+                <div key={catKey}>
+                  <button
+                    className="flex items-center gap-2 font-bold text-lg py-2 px-3 hover:bg-gray-100 rounded-lg transition w-full text-left text-slate-700 hover:text-slate-800"
+                    onClick={() => toggleMappaCategory(catKey)}
+                  >
+                    <span>{expandedMappa[catKey] ? '▼' : '▶'}</span>
+                    {cat.title}
+                  </button>
+                  {expandedMappa[catKey] && (
+                    <div className="ml-8 border-l-2 border-gray-200 pl-4 mt-1">
+                      {Object.entries(cat.subsections).map(([subKey, sub]) => (
+                        <div key={subKey} className="mb-2">
+                          <div className="font-semibold text-base mb-1 text-gray-700">{sub.title}</div>
+                          <div className="flex flex-wrap gap-2 ml-4">
+                            {getTonalidyChords(sub.chords).map((chord, idx) => (
+                              <button
+                                key={idx}
+                                className={`px-3 py-1 rounded-lg text-sm transition font-mono border ${chord.comune ? 'font-bold bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100' : 'font-medium bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
+                                onClick={() => handleChordClick(chord, catKey, {clientY: window.innerHeight/2})}
+                              >
+                                {chord.sigla}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          // Lista accordi (comuni o avanzati)
+          <div className="flex-1 space-y-8 bg-[#e7e8eb] rounded-2xl p-8 shadow-sm">
+            {Object.entries(chordData).map(([categoryKey, category]) => (
+              <div
+                key={categoryKey}
+                className="bg-transparent rounded-2xl p-0 shadow-none"
+              >
+                {/* Category Header */}
+                <button
+                  onClick={() => toggleCategory(categoryKey)}
+                  className="w-full flex items-center justify-between p-4 rounded-xl font-semibold text-lg mb-6 shadow-sm hover:shadow-md transition-all text-white hover:opacity-90"
+                  style={{
+                    backgroundColor: '#0a1833',
+                    letterSpacing: '0.03em',
+                  }}
+                >
+                  <span>{category.title}</span>
+                  {expandedCategories[categoryKey] ? <ChevronDown /> : <ChevronRight />}
+                </button>
+
+                {/* Subsections */}
+                {expandedCategories[categoryKey] && (
+                  <div className="space-y-4">
+                    {Object.entries(category.subsections)
+                      .filter(([_, subsection]) => {
+                        if (viewMode === 'accordi_avanzati') return true;
+                        return subsection.chords.some(chord => chord.comune);
+                      })
+                      .map(([subsectionKey, subsection]) => {
+                        const subsectionExpandKey = `${categoryKey}-${subsectionKey}`;
+                        const isSubsectionExpanded = expandedSubsections[subsectionExpandKey];
+                        return (
+                          <div key={subsectionKey} className="bg-white rounded-xl p-5 mb-4 ml-3 md:ml-6 shadow-sm border border-gray-200">
+                            {/* Subsection Header */}
+                            <button
+                              onClick={() => toggleSubsection(categoryKey, subsectionKey)}
+                              className="w-full flex items-center justify-between p-3 rounded-lg bg-gray-100 text-gray-800 font-bold mb-3 shadow-none hover:bg-gray-200 transition-colors"
+                              style={{boxShadow: 'none'}}
+                            >
+                              <span className="font-bold text-base tracking-wide">{subsection.title}</span>
+                              {isSubsectionExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                            </button>
+
+                            {/* Chords Grid */}
+                            {isSubsectionExpanded && (
+                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {getTonalidyChords(subsection.chords)
+                                  .filter(chord => viewMode === 'accordi_avanzati' || chord.comune)
+                                  .map((chord, index) => (
+                                    <button
+                                      key={index}
+                                      onClick={e => handleChordClick(chord, categoryKey, e)}
+                                      className={`p-4 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base font-mono shadow-sm group border-2
+                                        ${chord.comune
+                                          ? 'bg-blue-50 text-blue-900 font-bold hover:bg-blue-100 hover:shadow-md border-blue-200'
+                                          : 'bg-gray-50 text-gray-800 font-semibold hover:bg-gray-100 hover:shadow-md border-gray-200'}
+                                        ${selectedChord?.sigla === chord.sigla ? 'ring-2 ring-blue-400 bg-blue-100' : ''}`}
+                                      style={{boxShadow: '0 1px 3px 0 rgba(0,0,0,0.1)'}}
+                                    >
+                                      <div className="text-center">
+                                        <div className={`font-mono text-lg mb-1 tracking-wide ${chord.comune ? 'text-blue-800 font-bold' : 'text-gray-700 font-semibold'} group-hover:scale-105 transition-transform`}>{chord.sigla}</div>
+                                        <div className={`text-xs leading-tight font-sans ${chord.comune ? 'text-blue-600 font-medium' : 'text-gray-600 font-normal'} group-hover:underline transition-all`}>{chord.nome}</div>
+                                      </div>
+                                    </button>
+                                  ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Detail Panel */}
         {selectedChord && (
@@ -351,33 +685,41 @@ const ChordMindMap = () => {
                   </button>
                 </div>
                 <div className="space-y-4">
-                  <div className="text-center mb-2">
-                    <div className="text-2xl font-mono font-bold text-cyan-700 mb-1 tracking-wide">
-                      {selectedChord.sigla}
-                    </div>
-                    <div className="text-base text-gray-300 mb-1">
-                      <span className="text-gray-700">{selectedChord.nome}</span>
-                    </div>
-                    {selectedChord.comune && (
-                      <div className="inline-block bg-yellow-300 text-gray-900 px-2 py-1 rounded text-xs font-bold mt-1">
-                        comune
-                      </div>
-                    )}
-                  </div>
-                  <div className="pt-4">
-                    <div className="mb-2">
-                      <h4 className="font-semibold text-cyan-700 mb-1 text-xs uppercase tracking-wide">Formula</h4>
-                      <div className="font-mono text-base bg-gray-200 p-2 rounded-lg text-cyan-900">
-                        {selectedChord.formula}
-                      </div>
-                    </div>
-                    <div className="mb-2">
-                      <h4 className="font-semibold text-cyan-700 mb-1 text-xs uppercase tracking-wide">Note (in Do)</h4>
-                      <div className="font-mono text-base bg-gray-200 p-2 rounded-lg text-cyan-900">
-                        {selectedChord.note}
-                      </div>
-                    </div>
-                  </div>
+                  {(() => {
+                    // L'accordo selezionato è già quello trasposto, lo mostriamo direttamente
+                    const displayChord = selectedChord;
+                    return (
+                      <>
+                        <div className="text-center mb-2">
+                          <div className="text-2xl font-mono font-bold text-cyan-700 mb-1 tracking-wide">
+                            {displayChord.sigla}
+                          </div>
+                          <div className="text-base text-gray-300 mb-1">
+                            <span className="text-gray-700">{displayChord.nome}</span>
+                          </div>
+                          {displayChord.comune && (
+                            <div className="inline-block bg-yellow-300 text-gray-900 px-2 py-1 rounded text-xs font-bold mt-1">
+                              comune
+                            </div>
+                          )}
+                        </div>
+                        <div className="pt-4">
+                          <div className="mb-2">
+                            <h4 className="font-semibold text-cyan-700 mb-1 text-xs uppercase tracking-wide">Formula</h4>
+                            <div className="font-mono text-base bg-gray-200 p-2 rounded-lg text-cyan-900">
+                              {displayChord.formula}
+                            </div>
+                          </div>
+                          <div className="mb-2">
+                            <h4 className="font-semibold text-cyan-700 mb-1 text-xs uppercase tracking-wide">Note (in {selectedRoot})</h4>
+                            <div className="font-mono text-base bg-gray-200 p-2 rounded-lg text-cyan-900">
+                              {displayChord.note}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                   {/* Messaggio di chiusura */}
                   <div className="text-center text-xs text-cyan-700 opacity-80 mt-2 pt-2">
                     Per chiudere premi la <span className="font-bold">X</span> in alto a destra
@@ -389,76 +731,7 @@ const ChordMindMap = () => {
         )}
       </div>
 
-      {/* Bottoni legenda minimal in fondo, su sfondo trasparente */}
-      {modalita === 'miniaiutara' && (
-        <div className="mt-10 flex flex-col items-center" style={{background:'transparent', boxShadow:'none', padding:0}}>
-          <div className="flex justify-center gap-4 w-full">
-            <button
-              onClick={() => setShowOnlyComuni(true)}
-              className="px-6 py-2 rounded-2xl font-extrabold text-lg bg-yellow-100 text-yellow-900 transition-all duration-150 shadow-none"
-              style={{opacity: 1, cursor: 'pointer', border: 'none'}}
-            >
-              Accordi comuni
-            </button>
-            <button
-              onClick={() => setShowOnlyComuni(false)}
-              className="px-6 py-2 rounded-2xl font-bold text-lg bg-yellow-50 text-cyan-900 transition-all duration-150 shadow-none"
-              style={{opacity: 1, cursor: 'pointer', border: 'none'}}
-            >
-              Accordi avanzati
-            </button>
-          </div>
-          <button
-            className="mt-4 px-8 py-2 rounded-2xl font-bold text-lg bg-yellow-50 text-cyan-900 transition-all duration-150 shadow-none"
-            style={{opacity: 1, cursor: 'pointer', border: 'none'}}
-            onClick={() => setShowMappaGenerale(v => !v)}
-          >
-            Mappa generale
-          </button>
 
-          {showMappaGenerale && (
-            <div className="w-full max-w-2xl mt-8 mb-8 bg-white/90 rounded-2xl p-6 shadow-lg border border-yellow-100 text-cyan-900">
-              <div className="text-center text-2xl font-bold mb-4 flex items-center justify-center gap-2">
-                <span role="img" aria-label="nota musicale">🎵</span> Accordi
-              </div>
-              <div className="flex flex-col gap-2">
-                {Object.entries(chordData).map(([catKey, cat]) => (
-                  <div key={catKey}>
-                    <button
-                      className="flex items-center gap-2 font-bold text-lg py-1 px-2 hover:bg-yellow-50 rounded transition"
-                      onClick={() => toggleMappaCategory(catKey)}
-                    >
-                      <span>{expandedMappa[catKey] ? '▼' : '▶'}</span>
-                      {cat.title}
-                    </button>
-                    {expandedMappa[catKey] && (
-                      <div className="ml-8 border-l-2 border-yellow-100 pl-4 mt-1">
-                        {Object.entries(cat.subsections).map(([subKey, sub]) => (
-                          <div key={subKey} className="mb-2">
-                            <div className="font-semibold text-base mb-1">{sub.title}</div>
-                            <div className="flex flex-wrap gap-2 ml-4">
-                              {sub.chords.map((chord, idx) => (
-                                <button
-                                  key={idx}
-                                  className={`px-3 py-1 rounded-xl border-none text-base transition font-mono ${chord.comune ? 'font-extrabold bg-yellow-100 text-yellow-900' : 'font-semibold bg-yellow-50 text-cyan-900'} hover:bg-yellow-200`}
-                                  style={{boxShadow:'none'}}
-                                  onClick={() => handleChordClick(chord, catKey, {clientY: window.innerHeight/2})}
-                                >
-                                  {chord.sigla}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };
