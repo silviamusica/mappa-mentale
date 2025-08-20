@@ -149,7 +149,7 @@ const ChordMindMap = () => {
     if (csvData && csvData[targetRoot]) {
       // Mappa COMPLETA basata su tutti gli accordi esistenti nel CSV
       const csvTypeMap = {
-        // TRIADI (dalla intestazione CSV)
+        // TRIADI (dalla intestazione CSV riga 2)
         'C': 'Maggiore',
         'Cm': 'm',
         'Cdim': 'dim (°)',
@@ -157,7 +157,7 @@ const ChordMindMap = () => {
         'Csus2': 'sus 2',
         'Csus4': 'sus 4',
         
-        // QUADRIADI (dalla intestazione CSV)
+        // QUADRIADI (dalla intestazione CSV riga 2)
         'C6': '6',
         'Cm6': 'm6',
         'C7': '7 (di dominante)',
@@ -166,30 +166,32 @@ const ChordMindMap = () => {
         'Cm7♭5': 'm7b5 (semidim)',
         'Cdim7': '7dim',
         
-        // ACCORDI AGGIUNTI (dalla intestazione CSV)
-        'Cadd2': 'add 2',
-        'Cadd4': 'add 4',
-        'Cadd9': 'add 9',
+        // ACCORDI ESTESI - RIGA 2 CONTINUAZIONE (dalla intestazione CSV)
+        'Cm7maj': 'm (maj 7)',
+        'Cmaj7♯5': 'maj 7 ♯5',
+        'C7♯5': '7 ♯5',
+        'C7♭5': '7 ♭5',
+        'Cmaj7♭5': 'maj 7 ♭5',
+        'Cdimmaj7': 'dim (maj7)',
+        'C7sus4': '7 sus 4',
         
-        // ACCORDI ESTESI (che esistono nel nostro sistema)
-        'C7♯5': '7 ♯5',            // Do settima quinta aumentata
-        'C7♭5': '7 ♭5',            // Do settima quinta diminuita
+        // ACCORDI AGGIUNTI (dalla intestazione CSV riga 2)
+        'Cadd2': 'add 2',
+        'Cmadd2': 'm add 2',
+        'Cadd4': 'add 4',
+        'Cmadd4': 'm add 4',
+        'Cadd9': 'add 9 ',
+        'Cmadd9': 'm add 9',
         
         // ACCORDI ESTESI - RIGA 3 (dalla intestazione CSV)
         'C9': '9',
         'Cm9': 'm9',
         'Cmaj9': 'maj 9',
-        'C11': '11',
-        'Cm11': 'm 11',
-        'C13': '13',
-        'Cm13': 'm 13',
+        'C13sus4': '13 sus 4',
+
         // ACCORDI CHE NON ESISTONO nel CSV (usano formula)
-        'Cmaj11': null,   // ❌ Non nel CSV
-        'Cmaj13': null,   // ❌ Non nel CSV  
         'C7♯9': null,     // ❌ Non nel CSV
-        'C7♭9': null,     // ❌ Non nel CSV
-        'C7♯11': null,    // ❌ Non nel CSV
-        'C7♭13': null     // ❌ Non nel CSV
+        'C7♭9': null     // ❌ Non nel CSV
       };
 
       const csvType = csvTypeMap[chord.sigla];
@@ -306,24 +308,7 @@ const ChordMindMap = () => {
             { sigla: 'C7♭9', nome: 'Do settima nona diminuita', formula: '1 - 3 - 5 - ♭7 - ♭9', note: 'Do Mi Sol Si♭ Re♭', comune: false }
           ]
         },
-        undicesimi: {
-          title: "Accordi di Undicesima",
-          chords: [
-            { sigla: 'C11', nome: 'Do undicesima', formula: '1 - 3 - 5 - ♭7 - 9 - 11', note: 'Do Mi Sol Si♭ Re Fa', comune: false },
-            { sigla: 'Cmaj11', nome: 'Do undicesima maggiore', formula: '1 - 3 - 5 - 7 - 9 - 11', note: 'Do Mi Sol Si Re Fa', comune: false },
-            { sigla: 'Cm11', nome: 'Do minore undicesima', formula: '1 - ♭3 - 5 - ♭7 - 9 - 11', note: 'Do Mi♭ Sol Si♭ Re Fa', comune: false },
-            { sigla: 'C7♯11', nome: 'Do settima undicesima aumentata', formula: '1 - 3 - 5 - ♭7 - 9 - ♯11', note: 'Do Mi Sol Si♭ Re Fa♯', comune: false }
-          ]
-        },
-        tredicesimi: {
-          title: "Accordi di Tredicesima",
-          chords: [
-            { sigla: 'C13', nome: 'Do tredicesima', formula: '1 - 3 - 5 - ♭7 - 9 - 11 - 13', note: 'Do Mi Sol Si♭ Re Fa La', comune: false },
-            { sigla: 'Cmaj13', nome: 'Do tredicesima maggiore', formula: '1 - 3 - 5 - 7 - 9 - 11 - 13', note: 'Do Mi Sol Si Re Fa La', comune: false },
-            { sigla: 'Cm13', nome: 'Do minore tredicesima', formula: '1 - ♭3 - 5 - ♭7 - 9 - 11 - 13', note: 'Do Mi♭ Sol Si♭ Re Fa La', comune: false },
-            { sigla: 'C7♭13', nome: 'Do settima tredicesima diminuita', formula: '1 - 3 - 5 - ♭7 - 9 - ♭13', note: 'Do Mi Sol Si♭ Re La♭', comune: false }
-          ]
-        }
+
       }
     }
   };
@@ -341,6 +326,10 @@ const ChordMindMap = () => {
               <h1 className="text-2xl font-bold text-white">
                 🎵 Accordi Musicali ({selectedRoot})
               </h1>
+            </div>
+            
+            <div className="text-yellow-300 text-sm font-medium bg-gray-700 bg-opacity-50 rounded-lg p-3 border border-yellow-400 border-opacity-30 mb-4">
+              💡 Per vedere tutti gli accordi, seleziona "Accordi avanzati"
             </div>
             
             <div className="flex items-center gap-4">
