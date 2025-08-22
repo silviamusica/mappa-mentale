@@ -2,29 +2,37 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import './App.css';
 
-const ChordMindMap = () => {
+const App = () => {
   const [selectedChord, setSelectedChord] = useState(null);
-  const [popupPosition, setPopupPosition] = useState(null);
-  const [expandedCategories, setExpandedCategories] = useState({
-    triadi: true,
-    quadriadi: true,
-    estesi: false
-  });
+
+  const [expandedCategories, setExpandedCategories] = useState({});
   const [expandedSubsections, setExpandedSubsections] = useState({});
+  const [expandedNestedSubsections, setExpandedNestedSubsections] = useState({});
   const [viewMode, setViewMode] = useState('accordi_comuni'); // 'accordi_comuni', 'accordi_avanzati', 'mappa_generale'
   const [selectedRoot, setSelectedRoot] = useState('Do'); // Do, Mi e Sol per iniziare
   const [csvData, setCsvData] = useState(null); // Dati del CSV caricati
   const [csvLoading, setCsvLoading] = useState(true);
 
-  const [expandedMappa, setExpandedMappa] = useState({
-    triadi: true,
-    quadriadi: false,
-    estesi: false
-  });
+  const [expandedMappa, setExpandedMappa] = useState({});
+  
+  // Stato per le inversioni
+  const [showInversions, setShowInversions] = useState(false);
+  const [expandedInversions, setExpandedInversions] = useState({});
+  
+  // Stato per le istruzioni
+  const [showInstructions, setShowInstructions] = useState(false);
 
   const toggleSubsection = (categoryKey, subsectionKey) => {
     const key = `${categoryKey}_${subsectionKey}`;
     setExpandedSubsections(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  const toggleNestedSubsection = (categoryKey, subsectionKey, nestedSubsectionKey) => {
+    const key = `${categoryKey}_${subsectionKey}_${nestedSubsectionKey}`;
+    setExpandedNestedSubsections(prev => ({
       ...prev,
       [key]: !prev[key]
     }));
@@ -84,7 +92,7 @@ const ChordMindMap = () => {
               const accordoType = headers1[j]?.trim();
               const note = values[j]?.trim();
               
-              if (accordoType && note && note !== 'no') {
+              if (accordoType && note) {
                 csvDataMap[tonalita][accordoType] = note;
               }
             }
@@ -97,7 +105,7 @@ const ChordMindMap = () => {
               const accordoType = headers2[j]?.trim();
               if (accordoType && headerIndex < values.length) {
                 const note = values[headerIndex]?.trim();
-                if (note && note !== 'no') {
+                if (note) {
                   csvDataMap[tonalita][accordoType] = note;
                 }
                 headerIndex++;
@@ -125,9 +133,7 @@ const ChordMindMap = () => {
     loadCSV();
   }, []);
 
-  const handleChordClick = (chord, category, event) => {
-    const y = event?.clientY || window.innerHeight / 2;
-    setPopupPosition({ top: y });
+  const handleChordClick = (chord, category) => {
     setSelectedChord({ ...chord, category });
   };
 
@@ -187,30 +193,47 @@ const ChordMindMap = () => {
         'C9': '9',
         'Cm9': 'm9',
         'Cmaj9': 'maj 9',
+        'C11': '11',
+        'Cm11': 'm 11',
         'C13sus4': '13 sus 4',
 
         // ACCORDI CHE NON ESISTONO nel CSV (usano formula)
-        'C7♯9': null,     // ❌ Non nel CSV
-        'C7♭9': null     // ❌ Non nel CSV
+        // Rimossi C7♯9 e C7♭9 dalle none
       };
 
       const csvType = csvTypeMap[chord.sigla];
       if (csvType && csvData[targetRoot]) {
         // Prova prima il mapping esatto
         if (csvData[targetRoot][csvType]) {
-          newNote = csvData[targetRoot][csvType];
-          console.log(`✅ Trovato nel CSV: ${chord.sigla} -> ${targetRoot} -> ${csvType} = ${newNote}`);
+          const noteValue = csvData[targetRoot][csvType];
+          if (noteValue === 'no') {
+            // Caso "no" nel CSV - accordo enarmonico
+            newNote = 'enarmonico';
+          } else {
+            newNote = noteValue;
+            console.log(`✅ Trovato nel CSV: ${chord.sigla} -> ${targetRoot} -> ${csvType} = ${newNote}`);
+          }
         } else {
           // Prova varianti con spazi
           const csvTypeWithSpace = csvType + ' ';
           const csvTypeTrimmed = csvType.trim();
           
           if (csvData[targetRoot][csvTypeWithSpace]) {
-            newNote = csvData[targetRoot][csvTypeWithSpace];
-            console.log(`✅ Trovato nel CSV (con spazio): ${chord.sigla} -> ${targetRoot} -> "${csvTypeWithSpace}" = ${newNote}`);
+            const noteValue = csvData[targetRoot][csvTypeWithSpace];
+            if (noteValue === 'no') {
+              newNote = 'enarmonico';
+            } else {
+              newNote = noteValue;
+              console.log(`✅ Trovato nel CSV (con spazio): ${chord.sigla} -> ${targetRoot} -> "${csvTypeWithSpace}" = ${newNote}`);
+            }
           } else if (csvData[targetRoot][csvTypeTrimmed]) {
-            newNote = csvData[targetRoot][csvTypeTrimmed];
-            console.log(`✅ Trovato nel CSV (trimmed): ${chord.sigla} -> ${targetRoot} -> "${csvTypeTrimmed}" = ${newNote}`);
+            const noteValue = csvData[targetRoot][csvTypeTrimmed];
+            if (noteValue === 'no') {
+              newNote = 'enarmonico';
+            } else {
+              newNote = noteValue;
+              console.log(`✅ Trovato nel CSV (trimmed): ${chord.sigla} -> ${targetRoot} -> "${csvTypeTrimmed}" = ${newNote}`);
+            }
           } else {
             console.log(`❌ Non trovato nel CSV: ${chord.sigla} -> ${targetRoot} -> "${csvType}"`);
             console.log(`   Chiavi disponibili:`, Object.keys(csvData[targetRoot]));
@@ -236,6 +259,61 @@ const ChordMindMap = () => {
     return chords.map(chord => transposeChord(chord, selectedRoot));
   };
 
+  // Funzione per calcolare la nota enarmonica
+  const getEnharmonicNote = (note) => {
+    const enarmonicMap = {
+      'Do': 'Si#',
+      'Do#': 'Reb',
+      'Reb': 'Do#',
+      'Re': 'Do##',
+      'Re#': 'Mib',
+      'Mib': 'Re#',
+      'Mi': 'Fa',
+      'Fa': 'Mi#',
+      'Fa#': 'Solb',
+      'Solb': 'Fa#',
+      'Sol': 'Fa##',
+      'Sol#': 'Lab',
+      'Lab': 'Sol#',
+      'La': 'Sol##',
+      'La#': 'Sib',
+      'Sib': 'La#',
+      'Si': 'Do'
+    };
+    return enarmonicMap[note] || note;
+  };
+
+  // SISTEMA INTELLIGENTE PER LE INVERSIONI
+  const calculateInversions = (chord) => {
+    if (!chord.note || chord.note === 'prova a calcolarlo tu' || chord.note === 'enarmonico') {
+      return [];
+    }
+
+    const notes = chord.note.split(' ').filter(note => note.trim());
+    if (notes.length < 3) return [];
+
+    const inversions = [];
+    
+    // Per ogni possibile inversione (n-1 dove n è il numero di note)
+    for (let i = 1; i < notes.length; i++) {
+      const inversion = [...notes.slice(i), ...notes.slice(0, i)];
+      inversions.push({
+        position: i,
+        notes: inversion.join(' '),
+        description: `${i === 1 ? 'Primo' : i === 2 ? 'Secondo' : i === 3 ? 'Terzo' : `${i}º`} rivolto`
+      });
+    }
+
+    return inversions;
+  };
+
+  const toggleInversion = (chordKey) => {
+    setExpandedInversions(prev => ({
+      ...prev,
+      [chordKey]: !prev[chordKey]
+    }));
+  };
+
   // DATI ESPANSI - PIÙ ACCORDI PER TESTARE IL SISTEMA AUTOMATICO
   const chordData = {
     triadi: {
@@ -244,12 +322,17 @@ const ChordMindMap = () => {
       textColor: "text-cyan-100",
       subsections: {
         base: {
-          title: "Accordi Base",
+          title: "Maggiori e Minori",
           chords: [
             { sigla: 'C', nome: 'Do maggiore', formula: '1 - 3 - 5', note: 'Do Mi Sol', comune: true },
-            { sigla: 'Cm', nome: 'Do minore', formula: '1 - ♭3 - 5', note: 'Do Mi♭ Sol', comune: true },
-            { sigla: 'Cdim', nome: 'Do diminuito', formula: '1 - ♭3 - ♭5', note: 'Do Mi♭ Sol♭', comune: false },
-            { sigla: 'Caug', nome: 'Do aumentato', formula: '1 - 3 - ♯5', note: 'Do Mi Sol♯', comune: false }
+            { sigla: 'Cm', nome: 'Do minore', formula: '1 - ♭3 - 5', note: 'Do Mi♭ Sol', comune: true }
+          ]
+        },
+        alterati: {
+          title: "Aumentati e Diminuiti",
+          chords: [
+            { sigla: 'Caug', nome: 'Do aumentato', formula: '1 - 3 - ♯5', note: 'Do Mi Sol♯', comune: false },
+            { sigla: 'Cdim', nome: 'Do diminuito', formula: '1 - ♭3 - ♭5', note: 'Do Mi♭ Sol♭', comune: false }
           ]
         },
         sus: {
@@ -268,13 +351,29 @@ const ChordMindMap = () => {
       subsections: {
         settima: {
           title: "Accordi di Settima",
+          subsections: {
+            settima_maggiore: {
+              title: "Settime su Accordi Maggiori",
+              chords: [
+                { sigla: 'C7', nome: 'Do settima di dominante', formula: '1 - 3 - 5 - ♭7', note: 'Do Mi Sol Si♭', comune: true },
+                { sigla: 'Cmaj7', nome: 'Do settima maggiore', formula: '1 - 3 - 5 - 7', note: 'Do Mi Sol Si', comune: true }
+              ]
+            },
+            settima_minore: {
+              title: "Settime su Accordi Minori",
           chords: [
-            { sigla: 'C7', nome: 'Do settima di dominante', formula: '1 - 3 - 5 - ♭7', note: 'Do Mi Sol Si♭', comune: true },
-            { sigla: 'Cmaj7', nome: 'Do settima maggiore', formula: '1 - 3 - 5 - 7', note: 'Do Mi Sol Si', comune: true },
-            { sigla: 'Cm7', nome: 'Do minore settima', formula: '1 - ♭3 - 5 - ♭7', note: 'Do Mi♭ Sol Si♭', comune: true },
-            { sigla: 'Cm7♭5', nome: 'Do semidiminuito', formula: '1 - ♭3 - ♭5 - ♭7', note: 'Do Mi♭ Sol♭ Si♭', comune: false },
-            { sigla: 'Cdim7', nome: 'Do diminuito settima', formula: '1 - ♭3 - ♭5 - ♭♭7', note: 'Do Mi♭ Sol♭ La', comune: false }
+                { sigla: 'Cm7', nome: 'Do minore settima', formula: '1 - ♭3 - 5 - ♭7', note: 'Do Mi♭ Sol Si♭', comune: true },
+                { sigla: 'Cm7maj', nome: 'Do minore settima maggiore', formula: '1 - ♭3 - 5 - 7', note: 'Do Mi♭ Sol Si', comune: false }
           ]
+        },
+            settima_diminuita: {
+              title: "Settime su Accordi Diminuiti",
+          chords: [
+                { sigla: 'Cm7♭5', nome: 'Do semidiminuito', formula: '1 - ♭3 - ♭5 - ♭7', note: 'Do Mi♭ Sol♭ Si♭', comune: false },
+                { sigla: 'Cdim7', nome: 'Do diminuito settima', formula: '1 - ♭3 - ♭5 - ♭♭7', note: 'Do Mi♭ Sol♭ La', comune: false }
+              ]
+            }
+          }
         },
         sesta: {
           title: "Accordi di Sesta",
@@ -294,19 +393,44 @@ const ChordMindMap = () => {
       }
     },
     estesi: {
-      title: "ACCORDI ESTESI (5+ Note)",
+      title: "ESTESI (5+ Note)",
       color: "bg-purple-700",
       textColor: "text-purple-100",
       subsections: {
-        noni: {
+                noni: {
           title: "Accordi di Nona",
+          subsections: {
+            nona_maggiore: {
+              title: "None su Accordi Maggiori",
           chords: [
-            { sigla: 'C9', nome: 'Do nona di dominante', formula: '1 - 3 - 5 - ♭7 - 9', note: 'Do Mi Sol Si♭ Re', comune: false },
-            { sigla: 'Cmaj9', nome: 'Do nona maggiore', formula: '1 - 3 - 5 - 7 - 9', note: 'Do Mi Sol Si Re', comune: false },
-            { sigla: 'Cm9', nome: 'Do minore nona', formula: '1 - ♭3 - 5 - ♭7 - 9', note: 'Do Mi♭ Sol Si♭ Re', comune: false },
-            { sigla: 'C7♯9', nome: 'Do settima nona aumentata', formula: '1 - 3 - 5 - ♭7 - ♯9', note: 'Do Mi Sol Si♭ Re♯', comune: false },
-            { sigla: 'C7♭9', nome: 'Do settima nona diminuita', formula: '1 - 3 - 5 - ♭7 - ♭9', note: 'Do Mi Sol Si♭ Re♭', comune: false }
+                { sigla: 'C9', nome: 'Do nona di dominante', formula: '1 - 3 - 5 - ♭7 - 9', note: 'Do Mi Sol Si♭ Re', comune: true },
+                { sigla: 'Cmaj9', nome: 'Do nona maggiore', formula: '1 - 3 - 5 - 7 - 9', note: 'Do Mi Sol Si Re', comune: false }
           ]
+        },
+            nona_minore: {
+              title: "None su Accordi Minori",
+          chords: [
+                { sigla: 'Cm9', nome: 'Do minore nona', formula: '1 - ♭3 - 5 - ♭7 - 9', note: 'Do Mi♭ Sol Si♭ Re', comune: false }
+              ]
+            }
+          }
+        },
+        undicesimi: {
+          title: "Accordi di Undicesima",
+          subsections: {
+            undicesima_maggiore: {
+              title: "Undicesime su Accordi Maggiori",
+          chords: [
+                { sigla: 'C11', nome: 'Do undicesima di dominante', formula: '1 - 3 - 5 - ♭7 - 9 - 11', note: 'Do Mi Sol Si♭ Re Fa', comune: false }
+          ]
+        },
+            undicesima_minore: {
+              title: "Undicesime su Accordi Minori",
+          chords: [
+                { sigla: 'Cm11', nome: 'Do minore undicesima', formula: '1 - ♭3 - 5 - ♭7 - 9 - 11', note: 'Do Mi♭ Sol Si♭ Re Fa', comune: false }
+              ]
+            }
+          }
         },
 
       }
@@ -318,27 +442,68 @@ const ChordMindMap = () => {
       className="min-h-screen flex flex-col text-white relative overflow-auto"
       style={{ backgroundColor: '#0a1833' }}
     >
-      {/* Header */}
-      <div className="sticky top-0 z-30">
-        <div className="w-full px-6 py-4" style={{ backgroundColor: '#0a1833' }}>
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-bold text-white">
-                🎵 Accordi Musicali ({selectedRoot})
-              </h1>
+      {/* Header e Controlli Unificati */}
+      <div className="relative z-10">
+        <div className="w-full py-4 px-4 lg:px-12 xl:px-16 2xl:px-20" style={{ backgroundColor: '#0a1833' }}>
+          {/* Titolo */}
+          <div className="text-center mb-4">
+            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
+              🎵 Accordi Musicali
+            </h1>
+            <div className="text-lg text-yellow-300 font-medium">
+              Tonalità corrente: <span className="font-bold">{selectedRoot}</span>
             </div>
+          </div>
+
+          {/* Istruzioni collassabili */}
+          <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 rounded-xl border border-blue-500/30 mb-4">
+            <button
+              onClick={() => setShowInstructions(!showInstructions)}
+              className="w-full p-4 text-left transition-all duration-200 hover:bg-white/5 rounded-xl flex justify-between items-center"
+            >
+              <h2 className="text-yellow-300 font-bold text-lg">📖 Come usare l'applicazione</h2>
+              <span className="text-yellow-300 text-xl font-bold">
+                {showInstructions ? '−' : '+'}
+              </span>
+            </button>
             
-            <div className="text-yellow-300 text-sm font-medium bg-gray-700 bg-opacity-50 rounded-lg p-3 border border-yellow-400 border-opacity-30 mb-4">
-              💡 Per vedere tutti gli accordi, seleziona "Accordi avanzati"
-            </div>
-            
-            <div className="flex items-center gap-4">
+            {showInstructions && (
+              <div className="px-4 pb-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+                    <div className="font-semibold text-blue-300 mb-1">🎯 Modalità di visualizzazione</div>
+                    <div className="text-white/90">
+                      Seleziona <span className="font-bold text-yellow-300">"Accordi avanzati"</span> per vedere tutti gli accordi disponibili, oppure <span className="font-bold text-yellow-300">"Accordi comuni"</span> per vedere solo quelli più utilizzati.
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+                    <div className="font-semibold text-green-300 mb-1">🔄 Rivolti degli accordi</div>
+                    <div className="text-white/90">
+                      Attiva il pulsante <span className="font-bold text-yellow-300">"Rivolti"</span> per visualizzare tutti i rivolti di ogni accordo nei dettagli.
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
+                    <div className="font-semibold text-purple-300 mb-1">🎼 Cambiare tonalità</div>
+                    <div className="text-white/90">
+                      Scegli una <span className="font-bold text-yellow-300">tonalità diversa</span> dal menu a tendina per trasporre automaticamente tutti gli accordi.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Controlli */}
+          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+            <div className="flex flex-col sm:flex-row gap-4 items-center">
               <div className="flex items-center gap-2">
-                <span className="text-white text-sm font-medium">Modalità:</span>
+                <span className="text-white text-sm font-medium whitespace-nowrap">Modalità:</span>
                 <select
                   value={viewMode}
                   onChange={(e) => setViewMode(e.target.value)}
-                  className="bg-gray-600 text-white px-4 py-2 rounded-lg text-base font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400"
+                  className="bg-gray-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400 min-w-[140px]"
                 >
                   <option value="accordi_comuni">Accordi comuni</option>
                   <option value="accordi_avanzati">Accordi avanzati</option>
@@ -347,81 +512,121 @@ const ChordMindMap = () => {
               </div>
               
               <div className="flex items-center gap-2">
-                <span className="text-white text-sm font-medium">Tonalità:</span>
-                <select
-                  value={selectedRoot}
-                  onChange={(e) => setSelectedRoot(e.target.value)}
-                  className="bg-gray-600 text-white px-4 py-2 rounded-lg text-base font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400"
+                <span className="text-white text-sm font-medium whitespace-nowrap">Rivolti:</span>
+                <button
+                  onClick={() => setShowInversions(!showInversions)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                    showInversions 
+                      ? 'bg-green-600 text-white hover:bg-green-700' 
+                      : 'bg-gray-600 text-white hover:bg-gray-700'
+                  }`}
                 >
-                  <option value="Do">Do (C)</option>
-                  <option value="Do#">Do# (C#)</option>
-                  <option value="Reb">Re♭ (D♭)</option>
-                  <option value="Re">Re (D)</option>
-                  <option value="Re#">Re# (D#)</option>
-                  <option value="Mib">Mi♭ (E♭)</option>
-                  <option value="Mi">Mi (E)</option>
-                  <option value="Fa">Fa (F)</option>
-                  <option value="Fa#">Fa# (F#)</option>
-                  <option value="Solb">Sol♭ (G♭)</option>
-                  <option value="Sol">Sol (G)</option>
-                  <option value="Sol#">Sol# (G#)</option>
-                  <option value="Lab">La♭ (A♭)</option>
-                  <option value="La">La (A)</option>
-                  <option value="La#">La# (A#)</option>
-                  <option value="Sib">Si♭ (B♭)</option>
-                  <option value="Si">Si (B)</option>
-                </select>
+                  {showInversions ? '🔄 Attivi' : '🔄 Disattivi'}
+                </button>
               </div>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-white text-sm font-medium whitespace-nowrap">Tonalità:</span>
+              <select
+                value={selectedRoot}
+                onChange={(e) => setSelectedRoot(e.target.value)}
+                className="bg-gray-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400 min-w-[100px]"
+              >
+                <option value="Do">Do (C)</option>
+                <option value="Do#">Do# (C#)</option>
+                <option value="Reb">Re♭ (D♭)</option>
+                <option value="Re">Re (D)</option>
+                <option value="Re#">Re# (D#)</option>
+                <option value="Mib">Mi♭ (E♭)</option>
+                <option value="Mi">Mi (E)</option>
+                <option value="Fa">Fa (F)</option>
+                <option value="Fa#">Fa# (F#)</option>
+                <option value="Solb">Sol♭ (G♭)</option>
+                <option value="Sol">Sol (G)</option>
+                <option value="Sol#">Sol# (G#)</option>
+                <option value="Lab">La♭ (A♭)</option>
+                <option value="La">La (A)</option>
+                <option value="La#">La# (A#)</option>
+                <option value="Sib">Si♭ (B♭)</option>
+                <option value="Si">Si (B)</option>
+              </select>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col lg:flex-row relative z-10">
+      <div className="flex-1 flex flex-col lg:flex-row relative z-10 px-4 lg:px-12 xl:px-16 2xl:px-20">
         {viewMode === 'mappa_generale' ? (
-          <div className="flex-1 p-8">
+          <div className="flex-1 p-4 lg:p-8">
             <div className="bg-white text-gray-800 rounded-xl p-8 shadow-lg border border-gray-200">
               <h2 className="text-3xl font-bold mb-6 text-center">🗺️ Mappa Mentale degli Accordi</h2>
               <p className="text-center text-lg mb-8">Una vista d'insieme di tutti gli accordi musicali</p>
               
               {Object.entries(chordData).map(([catKey, category]) => (
                 <div key={catKey} className="mb-6">
-                  <button
+            <button
                     onClick={() => toggleMappaCategory(catKey)}
                     className="w-full text-left p-4 rounded-lg transition-all duration-200 flex justify-between items-center"
                     style={{ backgroundColor: '#0a1833', color: 'white' }}
                   >
                     <span className="text-lg font-semibold">{category.title}</span>
                     <span className="text-xl">{expandedMappa[catKey] ? '−' : '+'}</span>
-                  </button>
-                  
+            </button>
+
                   {expandedMappa[catKey] && (
                     <div className="mt-4 ml-4">
-                      {Object.entries(category.subsections).map(([subKey, sub]) => (
-                        <div key={subKey} className="mb-4">
-                          {sub.title && <h4 className="font-medium text-gray-700 mb-2">{sub.title}</h4>}
-                          <div className="flex flex-wrap gap-2 ml-4">
-                            {getTransposedChords(sub.chords).map((chord, idx) => (
-                              <button
-                                key={idx}
-                                className={`px-3 py-1 rounded-lg text-sm transition font-mono border ${chord.comune ? 'font-bold bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100' : 'font-medium bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
-                                onClick={() => handleChordClick(chord, catKey, {clientY: window.innerHeight/2})}
-                              >
-                                {chord.sigla}
-                              </button>
-                            ))}
-                          </div>
+                      {Object.entries(category.subsections).map(([subKey, sub]) => {
+                        const hasNestedSubsections = sub.subsections;
+                        
+                      return (
+                          <div key={subKey} className="mb-4">
+                            {sub.title && <h4 className="font-medium text-gray-700 mb-2">{sub.title}</h4>}
+                            
+                            {hasNestedSubsections ? (
+                              // Rendering per sottosezioni annidate (es. settime, none)
+                              Object.entries(sub.subsections).map(([nestedSubKey, nestedSub]) => (
+                                <div key={nestedSubKey} className="mb-3 ml-4">
+                                  <h5 className="font-medium text-gray-600 mb-2 text-sm">{nestedSub.title}</h5>
+                                  <div className="flex flex-wrap gap-2 ml-4">
+                                    {getTransposedChords(nestedSub.chords).map((chord, idx) => (
+                          <button
+                                        key={idx}
+                                        className={`px-3 py-1 rounded-lg text-sm transition font-mono border ${chord.comune ? 'font-bold bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100' : 'font-medium bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
+                                        onClick={() => handleChordClick(chord, catKey)}
+                                      >
+                                        {chord.sigla}
+                          </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              // Rendering normale per sottosezioni senza annidamento
+                              <div className="flex flex-wrap gap-2 ml-4">
+                                {getTransposedChords(sub.chords).map((chord, idx) => (
+                                  <button
+                                    key={idx}
+                                    className={`px-3 py-1 rounded-lg text-sm transition font-mono border ${chord.comune ? 'font-bold bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100' : 'font-medium bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
+                                    onClick={() => handleChordClick(chord, catKey)}
+                                  >
+                                    {chord.sigla}
+                                  </button>
+                                ))}
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      );
+                    })}
                 </div>
-              ))}
+              )}
             </div>
+          ))}
+        </div>
           </div>
         ) : (
-          <div className="flex-1 p-8">
+          <div className="flex-1 p-4 lg:p-8">
             <div className="bg-white text-gray-800 rounded-xl p-8 shadow-lg border border-gray-200">
               <h2 className="text-3xl font-bold mb-6 text-center">
                 {viewMode === 'accordi_comuni' ? '🎯 Accordi Comuni' : '🔧 Accordi Avanzati'}
@@ -444,8 +649,26 @@ const ChordMindMap = () => {
                     {isExpanded && (
                       <div className="mt-4">
                         {Object.entries(category.subsections).map(([subsectionKey, subsection]) => {
-                          const subsectionExpanded = expandedSubsections[`${categoryKey}_${subsectionKey}`] ?? true;
+                          const subsectionExpanded = expandedSubsections[`${categoryKey}_${subsectionKey}`] ?? false;
                           const hasTitle = subsection.title && subsection.title.trim() !== '';
+                          const hasNestedSubsections = subsection.subsections;
+                          
+                          // Controlla se la sottosezione ha almeno un accordo comune
+                          let subsectionHasCommonChords = false;
+                          if (hasNestedSubsections) {
+                            // Per sottosezioni annidate
+                            subsectionHasCommonChords = Object.values(subsection.subsections).some(nestedSubsection => 
+                              nestedSubsection.chords.some(chord => chord.comune)
+                            );
+                          } else {
+                            // Per sottosezioni normali
+                            subsectionHasCommonChords = subsection.chords.some(chord => chord.comune);
+                          }
+                          
+                          // Nascondi la sottosezione se non ha accordi comuni e siamo in modalità "accordi comuni"
+                          if (viewMode === 'accordi_comuni' && !subsectionHasCommonChords) {
+                            return null;
+                          }
                           
                           return (
                             <div key={subsectionKey} className="mb-4">
@@ -460,31 +683,85 @@ const ChordMindMap = () => {
                               )}
                               
                               {(!hasTitle || subsectionExpanded) && (
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-2">
-                                  {getTransposedChords(subsection.chords)
-                                    .filter(chord => viewMode === 'accordi_avanzati' || chord.comune)
-                                    .map((chord, index) => (
-                                      <button
-                                        key={index}
-                                        onClick={e => handleChordClick(chord, categoryKey, e)}
-                                        className={`p-4 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base font-mono shadow-sm group border-2
-                                          ${chord.comune
-                                            ? 'bg-blue-50 text-blue-900 font-bold hover:bg-blue-100 hover:shadow-md border-blue-200'
-                                            : 'bg-gray-50 text-gray-800 font-semibold hover:bg-gray-100 hover:shadow-md border-gray-200'}
-                                          ${selectedChord?.sigla === chord.sigla ? 'ring-2 ring-blue-400 bg-blue-100' : ''}`}
-                                        style={{boxShadow: '0 1px 3px 0 rgba(0,0,0,0.1)'}}
-                                      >
-                                        <div className="text-center">
-                                          <div className={`font-mono text-lg mb-1 tracking-wide ${chord.comune ? 'text-blue-800 font-bold' : 'text-gray-700 font-semibold'} group-hover:scale-105 transition-transform`}>{chord.sigla}</div>
-                                          <div className={`text-xs leading-tight font-sans ${chord.comune ? 'text-blue-600 font-medium' : 'text-gray-600 font-normal'} group-hover:underline transition-all`}>{chord.nome}</div>
+                                <div>
+                                  {hasNestedSubsections ? (
+                                    // Rendering per sottosezioni annidate (es. settime)
+                                    Object.entries(subsection.subsections).map(([nestedSubsectionKey, nestedSubsection]) => {
+                                      const nestedExpanded = expandedNestedSubsections[`${categoryKey}_${subsectionKey}_${nestedSubsectionKey}`] ?? false;
+                                      
+                                      // Controlla se la sottosezione annidata ha almeno un accordo comune
+                                      const nestedHasCommonChords = nestedSubsection.chords.some(chord => chord.comune);
+                                      
+                                      // Nascondi la sottosezione annidata se non ha accordi comuni e siamo in modalità "accordi comuni"
+                                      if (viewMode === 'accordi_comuni' && !nestedHasCommonChords) {
+                                        return null;
+                                      }
+                                      
+                                      return (
+                                        <div key={nestedSubsectionKey} className="mt-3 ml-4">
+                                          <button
+                                            onClick={() => toggleNestedSubsection(categoryKey, subsectionKey, nestedSubsectionKey)}
+                                            className="w-full text-left p-2 rounded-lg transition-all duration-200 bg-gray-50 text-gray-700 hover:bg-gray-100 flex justify-between items-center border border-gray-100 text-sm"
+                                          >
+                                            <span className="font-medium">{nestedSubsection.title}</span>
+                                            <span className="text-lg">{nestedExpanded ? '−' : '+'}</span>
+                                          </button>
+                                          
+                                          {nestedExpanded && (
+                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-2">
+                                              {getTransposedChords(nestedSubsection.chords)
+                                                .filter(chord => viewMode === 'accordi_avanzati' || chord.comune)
+                                                .map((chord, index) => (
+                                                  <button
+                                                    key={index}
+                                                    onClick={() => handleChordClick(chord, categoryKey)}
+                                                    className={`p-4 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base font-mono shadow-sm group border-2
+                                                      ${chord.comune
+                                                        ? 'bg-blue-50 text-blue-900 font-bold hover:bg-blue-100 hover:shadow-md border-blue-200'
+                                                        : 'bg-gray-50 text-gray-800 font-semibold hover:bg-gray-100 hover:shadow-md border-gray-200'}
+                                                      ${selectedChord?.sigla === chord.sigla ? 'ring-2 ring-blue-400 bg-blue-100' : ''}`}
+                                                    style={{boxShadow: '0 1px 3px 0 rgba(0,0,0,0.1)'}}
+                                                  >
+                                                    <div className="text-center">
+                                                      <div className={`font-mono text-lg mb-1 tracking-wide ${chord.comune ? 'text-blue-800 font-bold' : 'text-gray-700 font-semibold'} group-hover:scale-105 transition-transform`}>{chord.sigla}</div>
+                                                      <div className={`text-xs leading-tight font-sans ${chord.comune ? 'text-blue-600 font-medium' : 'text-gray-600 font-normal'} group-hover:underline transition-all`}>{chord.nome}</div>
+                                                    </div>
+                                                  </button>
+                                                ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    }).filter(Boolean) // Rimuove i null
+                                  ) : (
+                                    // Rendering normale per sottosezioni senza annidamento (es. seste, add)
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-2">
+                                      {getTransposedChords(subsection.chords)
+                                        .filter(chord => viewMode === 'accordi_avanzati' || chord.comune)
+                                        .map((chord, index) => (
+                                          <button
+                                            key={index}
+                                            onClick={() => handleChordClick(chord, categoryKey)}
+                                            className={`p-4 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base font-mono shadow-sm group border-2
+                                              ${chord.comune
+                                                ? 'bg-blue-50 text-blue-900 font-bold hover:bg-blue-100 hover:shadow-md border-blue-200'
+                                                : 'bg-gray-50 text-gray-800 font-semibold hover:bg-gray-100 hover:shadow-md border-gray-200'}
+                                              ${selectedChord?.sigla === chord.sigla ? 'ring-2 ring-blue-400 bg-blue-100' : ''}`}
+                                            style={{boxShadow: '0 1px 3px 0 rgba(0,0,0,0.1)'}}
+                                          >
+                                            <div className="text-center">
+                                              <div className={`font-mono text-lg mb-1 tracking-wide ${chord.comune ? 'text-blue-800 font-bold' : 'text-gray-700 font-semibold'} group-hover:scale-105 transition-transform`}>{chord.sigla}</div>
+                                              <div className={`text-xs leading-tight font-sans ${chord.comune ? 'text-blue-600 font-medium' : 'text-gray-600 font-normal'} group-hover:underline transition-all`}>{chord.nome}</div>
                                         </div>
                                       </button>
                                     ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }).filter(Boolean)}
                       </div>
                     )}
                   </div>
@@ -498,20 +775,18 @@ const ChordMindMap = () => {
         {selectedChord && (
           <>
             <div
-              className="fixed inset-0 bg-black bg-opacity-60 z-40 animate-fadein"
-              onClick={() => { setSelectedChord(null); setPopupPosition(null); }}
+              className="fixed inset-0 bg-black bg-opacity-60 z-50 animate-fadein"
+              onClick={() => setSelectedChord(null)}
             />
             <div
-              className="fixed left-1/2 transform -translate-x-1/2 bg-white rounded-xl shadow-2xl border border-gray-300 z-50 w-96 max-w-[90vw] animate-slidein"
-              style={{
-                top: `${Math.max(20, Math.min(popupPosition?.top - 150, window.innerHeight - 350))}px`
-              }}
+              className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl border border-gray-300 z-50 w-96 max-w-[90vw] max-h-[80vh] overflow-y-auto animate-modal"
+              style={{ top: 'calc(50vh + 50px)' }}
             >
               <div className="p-6">
                 <div className="flex justify-between items-start mb-4">
                   <h3 className="text-xl font-bold text-cyan-700">Dettagli Accordo</h3>
                   <button
-                    onClick={() => { setSelectedChord(null); setPopupPosition(null); }}
+                    onClick={() => setSelectedChord(null)}
                     className="text-gray-500 hover:text-gray-700 transition-colors p-1 rounded-full hover:bg-gray-100"
                     aria-label="Chiudi dettagli"
                   >
@@ -542,9 +817,64 @@ const ChordMindMap = () => {
                     <div className="mb-2">
                       <h4 className="font-semibold text-cyan-700 mb-1 text-xs uppercase tracking-wide">Note (in {selectedRoot})</h4>
                       <div className="font-mono text-base bg-gray-200 p-2 rounded-lg text-cyan-900">
-                        {selectedChord.note}
+                        {selectedChord.note === 'enarmonico' ? (
+                          <div className="relative group">
+                            <span className="text-purple-600 font-semibold cursor-help">
+                              enarmonico
+                            </span>
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-purple-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 max-w-48 text-center">
+                              Questo accordo esiste nella sua<br/>variante enarmonica con<br/><strong>{getEnharmonicNote(selectedRoot)}</strong>
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-purple-800"></div>
+                            </div>
+                          </div>
+                        ) : (
+                          selectedChord.note
+                        )}
                       </div>
                     </div>
+                    
+                    {/* INVERSIONI */}
+                    {showInversions && (
+                      <div className="mb-2">
+                        <div className="relative group mb-1">
+                          <h4 className="font-semibold text-cyan-700 text-xs uppercase tracking-wide cursor-help inline-block">
+                            Rivolti
+                          </h4>
+                          <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-cyan-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 max-w-64 text-left">
+                            L'ordine delle note dopo la prima è a tua scelta.<br/>
+                            Non devono essere presenti tutte le note: puoi omettere<br/>
+                            quinta, settima, nona, ecc. (mantieni settima e nona<br/>
+                            negli accordi che le contengono)
+                            <div className="absolute top-full left-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-cyan-800"></div>
+                          </div>
+                        </div>
+                        {(() => {
+                          const inversions = calculateInversions(selectedChord);
+                          if (inversions.length === 0) {
+                            return (
+                              <div className="text-sm text-gray-500 italic bg-gray-100 p-2 rounded-lg">
+                                Nessun rivolto disponibile per questo accordo
+                              </div>
+                            );
+                          }
+                          
+                          return (
+                            <div className="space-y-2">
+                              {inversions.map((inversion, idx) => (
+                                <div key={idx} className="bg-gradient-to-r from-blue-50 to-cyan-50 p-2 rounded-lg border border-blue-200">
+                                  <div className="text-xs font-semibold text-blue-700 mb-1">
+                                    {inversion.description}
+                                  </div>
+                                  <div className="font-mono text-sm text-blue-900">
+                                    {inversion.notes}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                   <div className="text-center text-xs text-cyan-700 opacity-80 mt-2 pt-2">
                     Per chiudere premi la <span className="font-bold">X</span> in alto a destra
@@ -559,4 +889,4 @@ const ChordMindMap = () => {
   );
 };
 
-export default ChordMindMap;
+export default App;
