@@ -35,7 +35,7 @@ const App = () => {
   const [usedChords, setUsedChords] = useState(new Set()); // Accordi già usati nel set
   const [wrongAnswers, setWrongAnswers] = useState([]); // Risposte sbagliate per il ripasso
   const [showReview, setShowReview] = useState(false); // Mostra il riepilogo
-  const [currentTonality, setCurrentTonality] = useState('Do'); // Tonalità corrente del set
+
   const [showGameSettings, setShowGameSettings] = useState(false); // Mostra/nasconde impostazioni gioco
 
   const toggleSubsection = (categoryKey, subsectionKey) => {
@@ -68,11 +68,6 @@ const App = () => {
   // Funzioni per il gioco Rebus
   const generateRebusChord = () => {
     console.log('🎯 Generando nuovo puzzle...');
-    
-    // Inizializza la tonalità corrente se non è ancora impostata
-    if (!currentTonality) {
-      setCurrentTonality(selectedRoot);
-    }
     
     // Trova tutti gli accordi disponibili (escludi quelli già usati)
     const allChords = [];
@@ -107,8 +102,27 @@ const App = () => {
       });
     });
 
+    // Filtra accordi per tonalità selezionata (prima riga del CSV)
+    const tonalitaFilteredChords = allChords.filter(chord => {
+      // La prima nota dell'accordo deve corrispondere alla tonalità selezionata
+      const firstNote = chord.note.split(' ')[0]; // Prima nota dell'accordo
+      return firstNote === selectedRoot;
+    });
+    
+    console.log(`🎵 Filtro tonalità: ${selectedRoot}, accordi disponibili: ${tonalitaFilteredChords.length}`);
+    
+    if (tonalitaFilteredChords.length === 0) {
+      console.log(`❌ Nessun accordo disponibile per la tonalità ${selectedRoot}, cambio tonalità`);
+      // Se non ci sono accordi per questa tonalità, prova con un'altra
+      const availableTonalities = getAvailableTonalities();
+      const randomTonalita = availableTonalities[Math.floor(Math.random() * availableTonalities.length)];
+      setSelectedRoot(randomTonalita);
+      console.log(`🔄 Cambiata tonalità a: ${randomTonalita}`);
+      return generateRebusChord(); // Ricorsione con nuova tonalità
+    }
+    
     // Filtra accordi già usati
-    const availableChords = allChords.filter(chord => !usedChords.has(chord.sigla));
+    const availableChords = tonalitaFilteredChords.filter(chord => !usedChords.has(chord.sigla));
     
     if (availableChords.length === 0) {
       console.log('❌ Nessun accordo disponibile, reset accordi usati');
@@ -123,73 +137,23 @@ const App = () => {
     // Aggiungi l'accordo agli usati
     setUsedChords(prev => new Set([...prev, randomChord.sigla]));
     
-    // Ottieni le note dell'accordo nella tonalità selezionata dall'utente
-    const transposedChord = transposeChord(randomChord, selectedRoot);
-    console.log('🎼 Accordo trasposto:', transposedChord);
-    
-    if (!transposedChord || !transposedChord.note || transposedChord.note === 'enarmonico') {
-      console.log('❌ Note non valide per l\'accordo');
-      return generateRebusChord(); // Prova con un altro accordo
-    }
-    
-    const chordNotes = transposedChord.note;
-    console.log('🎼 Note dell\'accordo:', chordNotes);
+    // Usa direttamente le note dal CSV (NESSUN TRASPORTO!)
+    const chordNotes = randomChord.note;
+    console.log('🎼 Note dell\'accordo (dal CSV):', chordNotes);
 
     // Dividi le note in array
     const notesArray = chordNotes.split(' ').filter(note => note.trim());
     console.log('🔢 Array note:', notesArray);
     
     // Determina quante note rimuovere in base al livello
-    // Nei livelli alti (4-5) è possibile rimuovere anche la fondamentale
-    const maxRemovableNotes = notesArray.length;
-    const effectiveLevel = Math.min(rebusLevel, maxRemovableNotes);
-    const notesToRemove = effectiveLevel;
+    const notesToRemove = Math.min(rebusLevel, notesArray.length);
     
-    console.log('🎯 Note totali:', notesArray.length, 'Note rimovibili:', maxRemovableNotes, 'Livello richiesto:', rebusLevel, 'Livello effettivo:', effectiveLevel, 'Note da rimuovere:', notesToRemove);
+    console.log('🎯 Note totali:', notesArray.length, 'Livello:', rebusLevel, 'Note da rimuovere:', notesToRemove);
     
     // Se non ci sono abbastanza note per il livello, riduci il numero
     if (notesToRemove <= 0) {
-      console.log('❌ Accordo troppo semplice per questo livello, riduco il livello');
-      // Riduci temporaneamente il livello per questo accordo
-      const adjustedLevel = Math.min(rebusLevel, maxRemovableNotes);
-      if (adjustedLevel <= 0) {
-        console.log('❌ Accordo troppo semplice anche per livello 1, cambio accordo');
-        return generateRebusChord(); // Prova con un altro accordo
-      }
-      // Usa il livello ridotto per questo accordo
-      const adjustedNotesToRemove = effectiveLevel;
-      console.log('🎯 Livello ridotto a:', effectiveLevel, 'Note da rimuovere:', adjustedNotesToRemove);
-      
-      // Rimuovi note casuali (inclusa la fondamentale se necessario)
-      const notesToRemoveIndices = [];
-      while (notesToRemoveIndices.length < adjustedNotesToRemove) {
-        const randomIndex = Math.floor(Math.random() * notesArray.length); // Include anche l'indice 0 (fondamentale)
-        if (!notesToRemoveIndices.includes(randomIndex)) {
-          notesToRemoveIndices.push(randomIndex);
-        }
-      }
-      
-      console.log('🗑️ Indici note rimosse:', notesToRemoveIndices);
-      
-      // Crea l'accordo puzzle
-      const puzzleNotes = notesArray.filter((_, index) => !notesToRemoveIndices.includes(index));
-      console.log('🧩 Note puzzle:', puzzleNotes);
-      
-      const rebusChord = {
-        ...randomChord,
-        originalNotes: chordNotes,
-        puzzleNotes: puzzleNotes.join(' '),
-        missingNotes: notesToRemoveIndices.map(i => notesArray[i]).join(' '),
-        level: effectiveLevel, // Usa il livello effettivo
-        tonality: selectedRoot
-      };
-      
-      console.log('🎮 Puzzle creato con livello ridotto:', rebusChord);
-      
-      setCurrentRebusChord(rebusChord);
-      setRebusAnswer('');
-      setRebusAttempts(0);
-      return;
+      console.log('❌ Accordo troppo semplice per questo livello, cambio accordo');
+      return generateRebusChord(); // Prova con un altro accordo
     }
     
     // Rimuovi note casuali (inclusa la fondamentale se necessario)
@@ -212,8 +176,7 @@ const App = () => {
       originalNotes: chordNotes,
       puzzleNotes: puzzleNotes.join(' '),
       missingNotes: notesToRemoveIndices.map(i => notesArray[i]).join(' '),
-      level: rebusLevel,
-      tonality: selectedRoot
+      level: rebusLevel
     };
     
     console.log('🎮 Puzzle creato:', rebusChord);
@@ -225,9 +188,6 @@ const App = () => {
 
   // Funzione per generare un nuovo set di 5 domande
   const generateNewSet = () => {
-    // Mantieni la tonalità selezionata dall'utente
-    setCurrentTonality(selectedRoot);
-    
     // Reset completo del set
     setRebusQuestionsLeft(5);
     setRebusCurrentSet(prev => prev + 1);
@@ -237,7 +197,7 @@ const App = () => {
     setWrongAnswers([]); // Reset errori
     setShowReview(false); // Nascondi riepilogo
     
-    alert(`🎵 Nuovo set in tonalità: ${selectedRoot} - 5 domande`);
+    alert(`🎵 Nuovo set - 5 domande`);
     generateRebusChord();
   };
 
@@ -291,7 +251,6 @@ const App = () => {
         chordName: currentRebusChord.nome,
         userAnswer: rebusAnswer.trim(),
         correctAnswer: currentRebusChord.missingNotes,
-        tonality: currentRebusChord.tonality,
         level: currentRebusChord.level,
         attempts: rebusAttempts
       };
@@ -1435,7 +1394,7 @@ const App = () => {
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                   <h4 className="font-semibold text-blue-800 mb-3 text-left">📈 Statistiche</h4>
                   <div className="space-y-2 text-sm text-blue-800 text-left">
-                    <div><strong>Tonalità:</strong> {selectedRoot}</div>
+
                     <div><strong>Livello:</strong> {rebusLevel}</div>
                     <div><strong>Punteggio finale:</strong> {rebusScore} punti</div>
                     <div><strong>Domande corrette:</strong> {5 - wrongAnswers.length}/5</div>
