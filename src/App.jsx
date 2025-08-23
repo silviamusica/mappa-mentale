@@ -21,6 +21,22 @@ const App = () => {
   
   // Stato per le istruzioni
   const [showInstructions, setShowInstructions] = useState(false);
+  
+  // Stato per il gioco Rebus
+  const [gameMode, setGameMode] = useState('none'); // 'none', 'rebus'
+  const [rebusLevel, setRebusLevel] = useState(1);
+  const [currentRebusChord, setCurrentRebusChord] = useState(null);
+  const [rebusAnswer, setRebusAnswer] = useState('');
+  const [rebusScore, setRebusScore] = useState(0);
+  const [rebusAttempts, setRebusAttempts] = useState(0);
+  const [rebusQuestionsLeft, setRebusQuestionsLeft] = useState(5);
+  const [rebusCurrentSet, setRebusCurrentSet] = useState(1);
+  const [tonalityFilter, setTonalityFilter] = useState('tutte'); // 'tutte', 'bianchi', 'neri'
+  const [usedChords, setUsedChords] = useState(new Set()); // Accordi già usati nel set
+  const [wrongAnswers, setWrongAnswers] = useState([]); // Risposte sbagliate per il ripasso
+  const [showReview, setShowReview] = useState(false); // Mostra il riepilogo
+  const [currentTonality, setCurrentTonality] = useState('Do'); // Tonalità corrente del set
+  const [showGameSettings, setShowGameSettings] = useState(false); // Mostra/nasconde impostazioni gioco
 
   const toggleSubsection = (categoryKey, subsectionKey) => {
     const key = `${categoryKey}_${subsectionKey}`;
@@ -48,6 +64,316 @@ const App = () => {
   const toggleMappaCategory = (cat) => {
     setExpandedMappa(prev => ({ ...prev, [cat]: !prev[cat] }));
   };
+
+  // Funzioni per il gioco Rebus
+  const generateRebusChord = () => {
+    console.log('🎯 Generando nuovo puzzle...');
+    
+    // Inizializza la tonalità corrente se non è ancora impostata
+    if (!currentTonality) {
+      setCurrentTonality(selectedRoot);
+    }
+    
+    // Trova tutti gli accordi disponibili (escludi quelli già usati)
+    const allChords = [];
+    Object.entries(chordData).forEach(([categoryKey, category]) => {
+      Object.entries(category.subsections).forEach(([subsectionKey, subsection]) => {
+        if (subsection.subsections) {
+          // Sottosezioni annidate
+          Object.entries(subsection.subsections).forEach(([nestedSubsectionKey, nestedSubsection]) => {
+            nestedSubsection.chords.forEach(chord => {
+              if (chord.note && chord.note !== 'enarmonico') {
+                allChords.push({
+                  ...chord,
+                  category: categoryKey,
+                  subsection: subsectionKey,
+                  nestedSubsection: nestedSubsectionKey
+                });
+              }
+            });
+          });
+        } else {
+          // Sottosezioni normali
+          subsection.chords.forEach(chord => {
+            if (chord.note && chord.note !== 'enarmonico') {
+              allChords.push({
+                ...chord,
+                category: categoryKey,
+                subsection: subsectionKey
+              });
+            }
+          });
+        }
+      });
+    });
+
+    // Filtra accordi già usati
+    const availableChords = allChords.filter(chord => !usedChords.has(chord.sigla));
+    
+    if (availableChords.length === 0) {
+      console.log('❌ Nessun accordo disponibile, reset accordi usati');
+      setUsedChords(new Set()); // Reset accordi usati
+      return generateRebusChord(); // Ricorsione per generare nuovo puzzle
+    }
+
+    // Seleziona un accordo casuale tra quelli disponibili
+    const randomChord = availableChords[Math.floor(Math.random() * availableChords.length)];
+    console.log('🎵 Accordo selezionato:', randomChord.sigla);
+    
+    // Aggiungi l'accordo agli usati
+    setUsedChords(prev => new Set([...prev, randomChord.sigla]));
+    
+    // Ottieni le note dell'accordo nella tonalità selezionata dall'utente
+    const transposedChord = transposeChord(randomChord, selectedRoot);
+    console.log('🎼 Accordo trasposto:', transposedChord);
+    
+    if (!transposedChord || !transposedChord.note || transposedChord.note === 'enarmonico') {
+      console.log('❌ Note non valide per l\'accordo');
+      return generateRebusChord(); // Prova con un altro accordo
+    }
+    
+    const chordNotes = transposedChord.note;
+    console.log('🎼 Note dell\'accordo:', chordNotes);
+
+    // Dividi le note in array
+    const notesArray = chordNotes.split(' ').filter(note => note.trim());
+    console.log('🔢 Array note:', notesArray);
+    
+    // Determina quante note rimuovere in base al livello
+    // Nei livelli alti (4-5) è possibile rimuovere anche la fondamentale
+    const maxRemovableNotes = notesArray.length;
+    const effectiveLevel = Math.min(rebusLevel, maxRemovableNotes);
+    const notesToRemove = effectiveLevel;
+    
+    console.log('🎯 Note totali:', notesArray.length, 'Note rimovibili:', maxRemovableNotes, 'Livello richiesto:', rebusLevel, 'Livello effettivo:', effectiveLevel, 'Note da rimuovere:', notesToRemove);
+    
+    // Se non ci sono abbastanza note per il livello, riduci il numero
+    if (notesToRemove <= 0) {
+      console.log('❌ Accordo troppo semplice per questo livello, riduco il livello');
+      // Riduci temporaneamente il livello per questo accordo
+      const adjustedLevel = Math.min(rebusLevel, maxRemovableNotes);
+      if (adjustedLevel <= 0) {
+        console.log('❌ Accordo troppo semplice anche per livello 1, cambio accordo');
+        return generateRebusChord(); // Prova con un altro accordo
+      }
+      // Usa il livello ridotto per questo accordo
+      const adjustedNotesToRemove = effectiveLevel;
+      console.log('🎯 Livello ridotto a:', effectiveLevel, 'Note da rimuovere:', adjustedNotesToRemove);
+      
+      // Rimuovi note casuali (inclusa la fondamentale se necessario)
+      const notesToRemoveIndices = [];
+      while (notesToRemoveIndices.length < adjustedNotesToRemove) {
+        const randomIndex = Math.floor(Math.random() * notesArray.length); // Include anche l'indice 0 (fondamentale)
+        if (!notesToRemoveIndices.includes(randomIndex)) {
+          notesToRemoveIndices.push(randomIndex);
+        }
+      }
+      
+      console.log('🗑️ Indici note rimosse:', notesToRemoveIndices);
+      
+      // Crea l'accordo puzzle
+      const puzzleNotes = notesArray.filter((_, index) => !notesToRemoveIndices.includes(index));
+      console.log('🧩 Note puzzle:', puzzleNotes);
+      
+      const rebusChord = {
+        ...randomChord,
+        originalNotes: chordNotes,
+        puzzleNotes: puzzleNotes.join(' '),
+        missingNotes: notesToRemoveIndices.map(i => notesArray[i]).join(' '),
+        level: effectiveLevel, // Usa il livello effettivo
+        tonality: selectedRoot
+      };
+      
+      console.log('🎮 Puzzle creato con livello ridotto:', rebusChord);
+      
+      setCurrentRebusChord(rebusChord);
+      setRebusAnswer('');
+      setRebusAttempts(0);
+      return;
+    }
+    
+    // Rimuovi note casuali (inclusa la fondamentale se necessario)
+    const notesToRemoveIndices = [];
+    while (notesToRemoveIndices.length < notesToRemove) {
+      const randomIndex = Math.floor(Math.random() * notesArray.length); // Include anche l'indice 0 (fondamentale)
+      if (!notesToRemoveIndices.includes(randomIndex)) {
+        notesToRemoveIndices.push(randomIndex);
+      }
+    }
+    
+    console.log('🗑️ Indici note rimosse:', notesToRemoveIndices);
+    
+    // Crea l'accordo puzzle
+    const puzzleNotes = notesArray.filter((_, index) => !notesToRemoveIndices.includes(index));
+    console.log('🧩 Note puzzle:', puzzleNotes);
+    
+    const rebusChord = {
+      ...randomChord,
+      originalNotes: chordNotes,
+      puzzleNotes: puzzleNotes.join(' '),
+      missingNotes: notesToRemoveIndices.map(i => notesArray[i]).join(' '),
+      level: rebusLevel,
+      tonality: selectedRoot
+    };
+    
+    console.log('🎮 Puzzle creato:', rebusChord);
+    
+    setCurrentRebusChord(rebusChord);
+    setRebusAnswer('');
+    setRebusAttempts(0);
+  };
+
+  // Funzione per generare un nuovo set di 5 domande
+  const generateNewSet = () => {
+    // Mantieni la tonalità selezionata dall'utente
+    setCurrentTonality(selectedRoot);
+    
+    // Reset completo del set
+    setRebusQuestionsLeft(5);
+    setRebusCurrentSet(prev => prev + 1);
+    setRebusScore(0);
+    setRebusAttempts(0);
+    setUsedChords(new Set()); // Reset accordi usati
+    setWrongAnswers([]); // Reset errori
+    setShowReview(false); // Nascondi riepilogo
+    
+    alert(`🎵 Nuovo set in tonalità: ${selectedRoot} - 5 domande`);
+    generateRebusChord();
+  };
+
+  // Funzione per ottenere tonalità disponibili in base al filtro
+  const getAvailableTonalities = () => {
+    if (tonalityFilter === 'bianchi') {
+      return ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si'];
+    } else if (tonalityFilter === 'neri') {
+      return ['Do#', 'Reb', 'Re#', 'Mib', 'Fa#', 'Solb', 'Sol#', 'Lab', 'La#', 'Sib'];
+    } else {
+      return ['Do', 'Do#', 'Reb', 'Re', 'Re#', 'Mib', 'Mi', 'Fa', 'Fa#', 'Solb', 'Sol', 'Sol#', 'Lab', 'La', 'La#', 'Sib', 'Si'];
+    }
+  };
+
+  const checkRebusAnswer = () => {
+    if (!currentRebusChord || !rebusAnswer.trim()) return;
+    
+    setRebusAttempts(prev => prev + 1);
+    
+    console.log('🔍 Confronto risposte:');
+    console.log('  Risposta utente:', rebusAnswer.trim());
+    console.log('  Note mancanti:', currentRebusChord.missingNotes);
+    
+    // Usa il confronto flessibile che gestisce ordine e formati
+    if (compareNotesUnordered(rebusAnswer.trim(), currentRebusChord.missingNotes)) {
+      // Risposta corretta
+      const pointsEarned = 6 - rebusLevel;
+      setRebusScore(prev => prev + pointsEarned);
+      
+      // Controlla se è l'ultima domanda del set
+      if (rebusQuestionsLeft === 1) {
+        // Set completato - mostra riepilogo
+        setRebusQuestionsLeft(0);
+        alert(`🎉 Set completato! Punteggio finale: ${rebusScore + pointsEarned} punti!`);
+        setCurrentRebusChord(null);
+        setRebusAnswer('');
+        setShowReview(true); // Mostra riepilogo con errori
+      } else {
+        // Ancora domande nel set
+        setRebusQuestionsLeft(prev => prev - 1);
+        alert(`🎉 Risposta corretta! +${pointsEarned} punti! Domande rimanenti: ${rebusQuestionsLeft - 1}`);
+        setCurrentRebusChord(null);
+        setRebusAnswer('');
+        // Genera automaticamente la prossima domanda
+        setTimeout(() => generateRebusChord(), 1000);
+      }
+    } else {
+      // Risposta sbagliata - salva per il ripasso
+      const wrongAnswer = {
+        chord: currentRebusChord.sigla,
+        chordName: currentRebusChord.nome,
+        userAnswer: rebusAnswer.trim(),
+        correctAnswer: currentRebusChord.missingNotes,
+        tonality: currentRebusChord.tonality,
+        level: currentRebusChord.level,
+        attempts: rebusAttempts
+      };
+      
+      setWrongAnswers(prev => [...prev, wrongAnswer]);
+      
+      // Controlla se è l'ultima domanda del set
+      if (rebusQuestionsLeft === 1) {
+        // Set completato - mostra riepilogo
+        setRebusQuestionsLeft(0);
+        setShowReview(true);
+      } else {
+        // Continua con la prossima domanda
+        setRebusQuestionsLeft(prev => prev - 1);
+        setTimeout(() => generateRebusChord(), 1000);
+      }
+      
+      alert('❌ Risposta sbagliata. Le note mancanti erano: ' + currentRebusChord.missingNotes);
+    }
+  };
+
+  // Funzione per normalizzare le stringhe delle note (case-insensitive, gestisce alterazioni)
+  const normalizeNoteString = (noteString) => {
+    return noteString
+      .toLowerCase()
+      .replace(/[,;]/g, ' ') // Sostituisce virgole e punto e virgola con spazi
+      .replace(/\s+/g, ' ') // Normalizza spazi multipli
+      .trim()
+      // Gestisce tutti i formati di bemolle
+      .replace(/♭/g, 'b') // Simbolo bemolle Unicode
+      .replace(/bemolle/g, 'b') // "bemolle"
+      .replace(/be molle/g, 'b') // "be molle"
+      .replace(/b molle/g, 'b') // "b molle"
+      .replace(/bemol/g, 'b') // "bemol"
+      .replace(/be mol/g, 'b') // "be mol"
+      .replace(/b mol/g, 'b') // "b mol"
+      // Gestisce tutti i formati di diesis
+      .replace(/♯/g, '#') // Simbolo diesis Unicode
+      .replace(/diesis/g, '#') // "diesis"
+      .replace(/di esis/g, '#') // "di esis"
+      .replace(/diesel/g, '#') // "diesel"
+      .replace(/di esel/g, '#') // "di esel"
+      // Normalizza le note con alterazioni (con o senza spazi)
+      .replace(/do\s*#/g, 'do#') // "do #" o "do#" → "do#"
+      .replace(/re\s*#/g, 're#') // "re #" o "re#" → "re#"
+      .replace(/fa\s*#/g, 'fa#') // "fa #" o "fa#" → "fa#"
+      .replace(/sol\s*#/g, 'sol#') // "sol #" o "sol#" → "sol#"
+      .replace(/la\s*#/g, 'la#') // "la #" o "la#" → "la#"
+      .replace(/si\s*#/g, 'si#') // "si #" o "si#" → "si#"
+      .replace(/do\s*b/g, 'dob') // "do b" o "dob" → "dob"
+      .replace(/re\s*b/g, 'reb') // "re b" o "reb" → "reb"
+      .replace(/mi\s*b/g, 'mib') // "mi b" o "mib" → "mib"
+      .replace(/fa\s*b/g, 'fab') // "fa b" o "fab" → "fab"
+      .replace(/sol\s*b/g, 'solb') // "sol b" o "solb" → "solb"
+      .replace(/la\s*b/g, 'lab') // "la b" o "lab" → "lab"
+      .replace(/si\s*b/g, 'sib'); // "si b" o "sib" → "sib"
+  };
+
+  // Funzione per confrontare le note indipendentemente dall'ordine
+  const compareNotesUnordered = (answer, correct) => {
+    // Normalizza entrambe le stringhe
+    const normalizedAnswer = normalizeNoteString(answer);
+    const normalizedCorrect = normalizeNoteString(correct);
+    
+    // Dividi in array di note
+    const answerNotes = normalizedAnswer.split(' ').filter(note => note.trim());
+    const correctNotes = normalizedCorrect.split(' ').filter(note => note.trim());
+    
+    // Se il numero di note è diverso, non possono essere uguali
+    if (answerNotes.length !== correctNotes.length) {
+      return false;
+    }
+    
+    // Crea copie degli array per non modificare gli originali
+    const answerCopy = [...answerNotes].sort();
+    const correctCopy = [...correctNotes].sort();
+    
+    // Confronta le note ordinate
+    return answerCopy.every((note, index) => note === correctCopy[index]);
+  };
+
+
 
   // Carica e parsa il CSV all'avvio
   useEffect(() => {
@@ -354,11 +680,11 @@ const App = () => {
           subsections: {
             settima_maggiore: {
               title: "Settime su Accordi Maggiori",
-              chords: [
+          chords: [
                 { sigla: 'C7', nome: 'Do settima di dominante', formula: '1 - 3 - 5 - ♭7', note: 'Do Mi Sol Si♭', comune: true },
                 { sigla: 'Cmaj7', nome: 'Do settima maggiore', formula: '1 - 3 - 5 - 7', note: 'Do Mi Sol Si', comune: true }
-              ]
-            },
+          ]
+        },
             settima_minore: {
               title: "Settime su Accordi Minori",
           chords: [
@@ -495,62 +821,194 @@ const App = () => {
             )}
           </div>
 
-          {/* Controlli */}
-          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-            <div className="flex flex-col sm:flex-row gap-4 items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-white text-sm font-medium whitespace-nowrap">Modalità:</span>
-                <select
-                  value={viewMode}
-                  onChange={(e) => setViewMode(e.target.value)}
-                  className="bg-gray-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400 min-w-[140px]"
-                >
-                  <option value="accordi_comuni">Accordi comuni</option>
-                  <option value="accordi_avanzati">Accordi avanzati</option>
-                  <option value="mappa_generale">Mappa generale</option>
-                </select>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-white text-sm font-medium whitespace-nowrap">Rivolti:</span>
-                <button
-                  onClick={() => setShowInversions(!showInversions)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-                    showInversions 
-                      ? 'bg-green-600 text-white hover:bg-green-700' 
-                      : 'bg-gray-600 text-white hover:bg-gray-700'
-                  }`}
-                >
-                  {showInversions ? '🔄 Attivi' : '🔄 Disattivi'}
-                </button>
-              </div>
-            </div>
-            
+          {/* Selezione Modalità Gioco (sempre visibile) */}
+          <div className="mt-4 flex items-center justify-center">
             <div className="flex items-center gap-2">
-              <span className="text-white text-sm font-medium whitespace-nowrap">Tonalità:</span>
+              <span className="text-white text-sm font-medium whitespace-nowrap">🎮 Modalità:</span>
               <select
-                value={selectedRoot}
-                onChange={(e) => setSelectedRoot(e.target.value)}
-                className="bg-gray-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400 min-w-[100px]"
+                value={gameMode}
+                onChange={(e) => setGameMode(e.target.value)}
+                className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400 min-w-[140px]"
               >
-                <option value="Do">Do (C)</option>
-                <option value="Do#">Do# (C#)</option>
-                <option value="Reb">Re♭ (D♭)</option>
-                <option value="Re">Re (D)</option>
-                <option value="Re#">Re# (D#)</option>
-                <option value="Mib">Mi♭ (E♭)</option>
-                <option value="Mi">Mi (E)</option>
-                <option value="Fa">Fa (F)</option>
-                <option value="Fa#">Fa# (F#)</option>
-                <option value="Solb">Sol♭ (G♭)</option>
-                <option value="Sol">Sol (G)</option>
-                <option value="Sol#">Sol# (G#)</option>
-                <option value="Lab">La♭ (A♭)</option>
-                <option value="La">La (A)</option>
-                <option value="La#">La# (A#)</option>
-                <option value="Sib">Si♭ (B♭)</option>
-                <option value="Si">Si (B)</option>
+                <option value="none">Modalità Apprendimento</option>
+                <option value="rebus">Modalità Gioco</option>
               </select>
+            </div>
+          </div>
+
+          {/* Impostazioni Dinamiche */}
+          <div className="mt-4">
+            {/* Tendina Impostazioni */}
+            <div className="bg-gray-700 rounded-lg p-3">
+              <button
+                onClick={() => setShowGameSettings(!showGameSettings)}
+                className="w-full flex items-center justify-between text-white text-sm font-medium cursor-pointer"
+              >
+                <span>⚙️ Impostazioni {gameMode === 'rebus' ? 'Gioco' : 'Apprendimento'}</span>
+                <span className="text-lg">{showGameSettings ? '−' : '+'}</span>
+              </button>
+              
+              {showGameSettings && (
+                <div className="mt-3 space-y-3">
+                                    {/* Modalità Accordi */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-white text-sm font-medium whitespace-nowrap">📚 Modalità Accordi:</span>
+                    <select
+                      value={viewMode}
+                      onChange={(e) => setViewMode(e.target.value)}
+                      className="bg-gray-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400 min-w-[140px]"
+                    >
+                      <option value="accordi_comuni">Accordi Comuni</option>
+                      <option value="accordi_avanzati">Accordi Avanzati</option>
+                      <option value="mappa_generale">Mappa Generale</option>
+                    </select>
+                  </div>
+                  
+                  {/* Rivolti (solo per modalità apprendimento) */}
+                  {gameMode === 'none' && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-white text-sm font-medium whitespace-nowrap">🔄 Rivolti:</span>
+                      <button
+                        onClick={() => setShowInversions(!showInversions)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                          showInversions 
+                            ? 'bg-green-600 hover:bg-green-700 text-white' 
+                            : 'bg-gray-600 hover:bg-gray-700 text-white'
+                        }`}
+                      >
+                        {showInversions ? '✅ Attivi' : '❌ Disattivi'}
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Filtro Tonalità */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-white text-sm font-medium whitespace-nowrap">🎵 Filtro:</span>
+                    <select
+                      value={tonalityFilter}
+                      onChange={(e) => setTonalityFilter(e.target.value)}
+                      className="bg-gray-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400 min-w-[120px]"
+                    >
+                      <option value="tutte">Tutte</option>
+                      <option value="bianchi">Tasti Bianchi</option>
+                      <option value="neri">Tasti Neri</option>
+                    </select>
+                  </div>
+                  
+                  {/* Selezione Tonalità */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-white text-sm font-medium whitespace-nowrap">🎹 Tonalità:</span>
+                    <select
+                      value={selectedRoot}
+                      onChange={(e) => setSelectedRoot(e.target.value)}
+                      className="bg-gray-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400 min-w-[100px]"
+                    >
+                      {tonalityFilter === 'bianchi' && (
+                        <>
+                          <option value="Do">Do (C)</option>
+                          <option value="Re">Re (D)</option>
+                          <option value="Mi">Mi (E)</option>
+                          <option value="Fa">Fa (F)</option>
+                          <option value="Sol">Sol (G)</option>
+                          <option value="La">La (A)</option>
+                          <option value="Si">Si (B)</option>
+                        </>
+                      )}
+                      {tonalityFilter === 'neri' && (
+                        <>
+                          <option value="Do#">Do# (C#)</option>
+                          <option value="Reb">Re♭ (D♭)</option>
+                          <option value="Re#">Re# (D#)</option>
+                          <option value="Mib">Mi♭ (E♭)</option>
+                          <option value="Fa#">Fa# (F#)</option>
+                          <option value="Solb">Sol♭ (G♭)</option>
+                          <option value="Sol#">Sol# (G#)</option>
+                          <option value="Lab">La♭ (A♭)</option>
+                          <option value="La#">La# (A#)</option>
+                          <option value="Sib">Si♭ (B♭)</option>
+                        </>
+                      )}
+                      {tonalityFilter === 'tutte' && (
+                        <>
+                          <option value="Do">Do (C)</option>
+                          <option value="Do#">Do# (C#)</option>
+                          <option value="Reb">Re♭ (D♭)</option>
+                          <option value="Re">Re (D)</option>
+                          <option value="Re#">Re# (D#)</option>
+                          <option value="Mib">Mi♭ (E♭)</option>
+                          <option value="Mi">Mi (E)</option>
+                          <option value="Fa">Fa (F)</option>
+                          <option value="Fa#">Fa# (F#)</option>
+                          <option value="Solb">Sol♭ (G♭)</option>
+                          <option value="Sol">Sol (G)</option>
+                          <option value="Sol#">Sol# (G#)</option>
+                          <option value="Lab">La♭ (A♭)</option>
+                          <option value="La">La (A)</option>
+                          <option value="La#">La# (A#)</option>
+                          <option value="Sib">Si♭ (B♭)</option>
+                          <option value="Si">Si (B)</option>
+                        </>
+                      )}
+                    </select>
+        </div>
+                  
+                  {/* Opzioni specifiche per Modalità Gioco */}
+                  {gameMode === 'rebus' && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="text-white text-sm font-medium whitespace-nowrap">📊 Livello:</span>
+                        <select 
+                          value={rebusLevel} 
+                          onChange={(e) => setRebusLevel(parseInt(e.target.value))} 
+                          className="bg-gray-600 text-white px-3 py-2 rounded-lg text-sm font-medium cursor-pointer border-none outline-none focus:ring-2 focus:ring-yellow-400 min-w-[80px]"
+                        >
+                          <option value={1}>1 - Indovina la nota mancante</option>
+                          <option value={2}>2 - Indovina le 2 note mancanti</option>
+                          <option value={3}>3 - Indovina le 3 note mancanti</option>
+                          <option value={4}>4 - Indovina le 4 note mancanti (può includere la fondamentale)</option>
+                          <option value={5}>5 - Indovina le 5 note mancanti (può includere la fondamentale)</option>
+                        </select>
+      </div>
+                      
+                      {/* Statistiche Gioco */}
+                      <div className="grid grid-cols-2 gap-2 text-xs text-white">
+                        <div className="bg-gray-600 p-2 rounded text-center">
+                          <div className="font-semibold">Set {rebusCurrentSet}</div>
+                          <div>Domande: {rebusQuestionsLeft}/5</div>
+                        </div>
+                        <div className="bg-gray-600 p-2 rounded text-center">
+                          <div className="font-semibold">Punteggio</div>
+                          <div>{rebusScore}</div>
+                        </div>
+                      </div>
+                      
+                      {/* Pulsanti Azione */}
+                      <div className="flex gap-2">
+                        {rebusQuestionsLeft === 0 ? (
+                          <button 
+                            onClick={generateNewSet} 
+                            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+                          >
+                            🆕 Nuovo Set
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={generateRebusChord} 
+                            className="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200"
+                          >
+                            🎯 Nuovo Puzzle
+                          </button>
+                        )}
+                      </div>
+                      
+                      {/* Regole */}
+                      <div className="text-xs text-yellow-200 text-left">
+                        💡 <strong>Regole:</strong> Indovina le note mancanti!
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -637,15 +1095,15 @@ const App = () => {
                 
                 return (
                   <div key={categoryKey} className="mb-6">
-                    <button
-                      onClick={() => toggleCategory(categoryKey)}
+            <button
+              onClick={() => toggleCategory(categoryKey)}
                       className="w-full text-left p-4 rounded-lg transition-all duration-200 hover:shadow-md flex justify-between items-center"
                       style={{ backgroundColor: '#0a1833', color: 'white' }}
                     >
                       <span className="text-lg font-semibold">{category.title}</span>
                       <span className="text-xl font-bold">{isExpanded ? '−' : '+'}</span>
-                    </button>
-                    
+            </button>
+
                     {isExpanded && (
                       <div className="mt-4">
                         {Object.entries(category.subsections).map(([subsectionKey, subsection]) => {
@@ -670,16 +1128,16 @@ const App = () => {
                             return null;
                           }
                           
-                          return (
+                      return (
                             <div key={subsectionKey} className="mb-4">
                               {hasTitle && (
-                                <button
-                                  onClick={() => toggleSubsection(categoryKey, subsectionKey)}
+                          <button
+                            onClick={() => toggleSubsection(categoryKey, subsectionKey)}
                                   className="w-full text-left p-3 rounded-lg transition-all duration-200 bg-gray-100 text-gray-800 hover:bg-gray-200 flex justify-between items-center border border-gray-200"
-                                >
+                          >
                                   <span className="text-base font-medium">{subsection.title}</span>
                                   <span className="text-lg">{subsectionExpanded ? '−' : '+'}</span>
-                                </button>
+                          </button>
                               )}
                               
                               {(!hasTitle || subsectionExpanded) && (
@@ -711,27 +1169,27 @@ const App = () => {
                                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-2">
                                               {getTransposedChords(nestedSubsection.chords)
                                                 .filter(chord => viewMode === 'accordi_avanzati' || chord.comune)
-                                                .map((chord, index) => (
-                                                  <button
-                                                    key={index}
+                                .map((chord, index) => (
+                                  <button
+                                    key={index}
                                                     onClick={() => handleChordClick(chord, categoryKey)}
                                                     className={`p-4 rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 text-base font-mono shadow-sm group border-2
-                                                      ${chord.comune
+                                      ${chord.comune
                                                         ? 'bg-blue-50 text-blue-900 font-bold hover:bg-blue-100 hover:shadow-md border-blue-200'
                                                         : 'bg-gray-50 text-gray-800 font-semibold hover:bg-gray-100 hover:shadow-md border-gray-200'}
                                                       ${selectedChord?.sigla === chord.sigla ? 'ring-2 ring-blue-400 bg-blue-100' : ''}`}
                                                     style={{boxShadow: '0 1px 3px 0 rgba(0,0,0,0.1)'}}
-                                                  >
-                                                    <div className="text-center">
+                                  >
+                                    <div className="text-center">
                                                       <div className={`font-mono text-lg mb-1 tracking-wide ${chord.comune ? 'text-blue-800 font-bold' : 'text-gray-700 font-semibold'} group-hover:scale-105 transition-transform`}>{chord.sigla}</div>
                                                       <div className={`text-xs leading-tight font-sans ${chord.comune ? 'text-blue-600 font-medium' : 'text-gray-600 font-normal'} group-hover:underline transition-all`}>{chord.nome}</div>
-                                                    </div>
-                                                  </button>
-                                                ))}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
+                                    </div>
+                                  </button>
+                                ))}
+                            </div>
+                          )}
+                        </div>
+                      );
                                     }).filter(Boolean) // Rimuove i null
                                   ) : (
                                     // Rendering normale per sottosezioni senza annidamento (es. seste, add)
@@ -755,11 +1213,11 @@ const App = () => {
                                         </div>
                                       </button>
                                     ))}
-                                  </div>
-                                )}
-                              </div>
+                </div>
+              )}
+            </div>
                             )}
-                          </div>
+        </div>
                         );
                       }).filter(Boolean)}
                       </div>
@@ -825,12 +1283,12 @@ const App = () => {
                             <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-purple-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 max-w-48 text-center">
                               Questo accordo esiste nella sua<br/>variante enarmonica con<br/><strong>{getEnharmonicNote(selectedRoot)}</strong>
                               <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-purple-800"></div>
-                            </div>
-                          </div>
+                      </div>
+                    </div>
                         ) : (
                           selectedChord.note
                         )}
-                      </div>
+                  </div>
                     </div>
                     
                     {/* INVERSIONI */}
@@ -885,6 +1343,169 @@ const App = () => {
           </>
         )}
       </div>
+
+      {/* Interfaccia del gioco Rebus */}
+      {gameMode === 'rebus' && currentRebusChord && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 z-[9998] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-300 z-[9999] w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-xl font-bold text-cyan-700">🎮 Puzzle Rebus - Livello {currentRebusChord.level}</h3>
+            <button
+                  onClick={() => setCurrentRebusChord(null)}
+                  className="text-gray-500 hover:text-gray-700 transition-colors p-1 rounded-full hover:bg-gray-100"
+                  aria-label="Chiudi puzzle"
+                >
+                  ✕
+            </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-semibold text-gray-800 mb-2">🎵 Accordo: {currentRebusChord.sigla}</h4>
+                  <p className="text-sm text-gray-700 mb-1">Formula: {currentRebusChord.formula}</p>
+                  <p className="text-sm text-gray-700">Nome: {currentRebusChord.nome}</p>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold text-gray-800 mb-2">🔍 Puzzle:</h4>
+                  <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                    <p className="text-lg font-mono text-blue-800">{currentRebusChord.puzzleNotes}</p>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">Indovina le note mancanti</p>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold text-gray-800 mb-2">✍️ La tua risposta:</h4>
+                  <input
+                    type="text"
+                    value={rebusAnswer}
+                    onChange={(e) => setRebusAnswer(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && checkRebusAnswer()}
+                    placeholder="Es: Mi Sol, Mi,Sol, Mi# Sol, Mi diesis Sol, Mib Sol, Mi bemolle Sol"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-transparent text-gray-800"
+                  />
+                  <div className="text-xs text-gray-500 mt-1">
+                    💡 <strong>Formati accettati:</strong> Spazi, virgole, "Mi#", "Mi #", "Mi diesis", "Mib", "Mi b", "Mi bemolle" - Ordine libero!
+                  </div>
+                </div>
+                
+                <div className="flex gap-2">
+            <button
+                    onClick={checkRebusAnswer}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+            >
+                    ✅ Controlla
+            </button>
+          <button
+                    onClick={() => setCurrentRebusChord(null)}
+                    className="bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg font-medium transition-colors"
+          >
+                    ❌ Passa
+          </button>
+                </div>
+                
+                <div className="text-center text-sm text-gray-700">
+                  Set {rebusCurrentSet} | Domande rimanenti: {Math.max(0, rebusQuestionsLeft)}/5 | Tentativi: {rebusAttempts} | Punteggio: {rebusScore}
+              </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Riepilogo del set con errori */}
+      {showReview && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 z-[9998] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-300 z-[9999] w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-6">
+                <h3 className="text-2xl font-bold text-cyan-700">📊 Riepilogo Set {rebusCurrentSet}</h3>
+                    <button
+                  onClick={() => setShowReview(false)}
+                  className="text-gray-500 hover:text-gray-700 transition-colors p-2 rounded-full hover:bg-gray-100"
+                  aria-label="Chiudi riepilogo"
+                    >
+                  ✕
+                    </button>
+                            </div>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Statistiche generali */}
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <h4 className="font-semibold text-blue-800 mb-3 text-left">📈 Statistiche</h4>
+                  <div className="space-y-2 text-sm text-blue-800 text-left">
+                    <div><strong>Tonalità:</strong> {selectedRoot}</div>
+                    <div><strong>Livello:</strong> {rebusLevel}</div>
+                    <div><strong>Punteggio finale:</strong> {rebusScore} punti</div>
+                    <div><strong>Domande corrette:</strong> {5 - wrongAnswers.length}/5</div>
+                    <div><strong>Errori totali:</strong> {wrongAnswers.length}</div>
+                          </div>
+                      </div>
+                
+                {/* Punteggio per livello */}
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <h4 className="font-semibold text-green-800 mb-3 text-left">🎯 Punteggio per livello</h4>
+                  <div className="text-sm text-green-800 text-left">
+                    <div><strong>Livello {rebusLevel}:</strong> {6 - rebusLevel} punti per risposta corretta</div>
+                    <div><strong>Punteggio massimo:</strong> {(6 - rebusLevel) * 5} punti</div>
+                    <div><strong>Punteggio ottenuto:</strong> {rebusScore} punti</div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Errori da ripassare */}
+              {wrongAnswers.length > 0 && (
+                <div className="mt-6">
+                  <h4 className="font-semibold text-red-700 mb-4 text-lg text-left">❌ Errori da ripassare</h4>
+                  <div className="space-y-4">
+                    {wrongAnswers.map((error, index) => (
+                      <div key={index} className="bg-red-50 p-4 rounded-lg border border-red-200">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <div className="font-semibold text-red-800 mb-2 text-left">
+                              🎵 {error.chord}
+                            </div>
+                            <div className="text-sm text-red-700 space-y-1 text-left">
+                              <div><strong>Nome:</strong> {error.chordName || 'N/A'}</div>
+                              <div><strong>Livello:</strong> {error.level}</div>
+                              <div><strong>Tentativi:</strong> {error.attempts}</div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-sm text-red-700 space-y-1 text-left">
+                              <div><strong>La tua risposta:</strong></div>
+                              <div className="bg-white p-2 rounded border text-red-600">"{error.userAnswer}"</div>
+                              <div><strong>Risposta corretta:</strong></div>
+                              <div className="bg-white p-2 rounded border text-green-600 font-semibold">"{error.correctAnswer}"</div>
+                            </div>
+                          </div>
+                        </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+              
+              {/* Azioni */}
+              <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-start">
+                <button
+                  onClick={generateNewSet}
+                  className="bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded-lg font-medium transition-colors"
+                >
+                  🆕 Nuovo Set
+                </button>
+                <button
+                  onClick={() => setShowReview(false)}
+                  className="bg-gray-500 hover:bg-gray-600 text-white py-3 px-6 rounded-lg font-medium transition-colors"
+                >
+                  📖 Chiudi Riepilogo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
